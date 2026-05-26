@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Your Skills{% endblock %}
+{% block page_title %}Your Skills{% endblock %}
+
+{% block dashboard_content %}
+<div class="card">
+  <div class="card-body">
+    <h5>Manual Skills</h5>
+    <p class="text-muted small">Skills you've added manually are listed here. They can be attached to a specific resume or be global.</p>
+
+    {% if not grouped %}
+    <p class="text-muted">No manual skills yet. Use the dashboard to add skills quickly.</p>
+    {% endif %}
+
+    {% for key, skills in grouped.items() %}
+      <div class="skill-group mb-4">
+        <h6>
+          {% if key == 'global' %}Global{% else %}
+            {% set r = resumes | selectattr('id','equalto', key) | list | first %}
+            {% if r %}Resume: {{ r.original_filename }}{% else %}Resume #{{ key }}{% endif %}
+          {% endif %}
+        </h6>
+        <div class="skill-cloud">
+          {% for s in skills %}
+          <div class="skill-item d-inline-block me-2 mb-2">
+            <span class="skill-pill">{{ s.skill_name }}</span>
+            <form method="POST" action="{{ url_for('dashboard.remove_skill') }}" style="display:inline">
+              <input type="hidden" name="skill_id" value="{{ s.id }}" />
+              <button class="btn btn-sm btn-link text-danger">Remove</button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -87,7 +87,7 @@
               <i class="bi bi-file-earmark-word-fill text-primary"></i>
               {% endif %}
             </div>
-            <div class="resume-details">
+            <div class="resume-details flex-grow-1">
               <div class="resume-filename">
                 {{ resume.original_filename }}
                 {% if loop.first %}<span class="badge bg-success ms-1 small">Latest</span>{% endif %}
@@ -105,6 +105,18 @@
                 {{ resume.skills_list | length }} skills detected
               </div>
               {% endif %}
+            </div>
+            <div class="resume-actions">
+              <form method="POST" action="{{ url_for('dashboard.delete_resume', resume_id=resume.id) }}" style="display: inline;">
+                <button 
+                  type="submit" 
+                  class="btn btn-sm btn-outline-danger delete-resume-btn"
+                  data-filename="{{ resume.original_filename }}"
+                  onclick="return confirm('Are you sure you want to delete &quot;{{ resume.original_filename }}&quot;? This action cannot be undone.');"
+                >
+                  <i class="bi bi-trash me-1"></i>Delete
+                </button>
+              </form>
             </div>
           </div>
           {% endfor %}
@@ -125,4 +137,88 @@
   </div>
 
 </div>
+
+<style>
+  .resume-history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background: #f8f9fa;
+    transition: all 0.2s ease;
+  }
+
+  .resume-history-item:hover {
+    background: #ffffff;
+    border-color: #dee2e6;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+  }
+
+  .resume-history-item.resume-latest {
+    border-left: 4px solid #28a745;
+  }
+
+  .resume-icon {
+    font-size: 24px;
+    min-width: 24px;
+  }
+
+  .resume-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .resume-filename {
+    font-weight: 600;
+    color: #1a202c;
+    word-break: break-word;
+  }
+
+  .resume-meta {
+    font-size: 12px;
+    color: #6c757d;
+  }
+
+  .resume-skills-count {
+    font-size: 12px;
+    color: #f39c12;
+  }
+
+  .resume-actions {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .delete-resume-btn {
+    font-size: 13px;
+  }
+
+  .delete-resume-btn:hover {
+    background-color: #dc3545 !important;
+    color: white !important;
+    border-color: #dc3545 !important;
+  }
+
+  @media (max-width: 768px) {
+    .resume-history-item {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .resume-actions {
+      margin-left: 0;
+      margin-top: 8px;
+      width: 100%;
+    }
+
+    .resume-actions button {
+      width: 100%;
+    }
+  }
+</style>
+
 {% endblock dashboard_content %}

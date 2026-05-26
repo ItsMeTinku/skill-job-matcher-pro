@@ -41,6 +41,15 @@ class User(UserMixin, db.Model):
         order_by="Resume.uploaded_at.desc()",
     )
 
+    # ── Manual skills added by the user (UserSkill model)
+    manual_skills = db.relationship(
+        "UserSkill",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
+        order_by="UserSkill.created_at.desc()",
+    )
+
     # ── Password helpers ──────────────────────────────────────────────
     def set_password(self, plain_text: str) -> None:
         """Hash and store *plain_text*. Never store raw passwords."""

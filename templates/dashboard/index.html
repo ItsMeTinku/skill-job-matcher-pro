@@ -6,28 +6,28 @@
 
 <!-- ── Stats Row ─────────────────────────────────────────────────── -->
 <div class="stats-row">
-  <div class="stat-card">
+  <a class="stat-card" href="{{ url_for('dashboard.profile') }}">
     <div class="stat-icon stat-icon-blue"><i class="bi bi-file-earmark-person"></i></div>
     <div class="stat-body">
       <div class="stat-value">{{ total_resumes }}</div>
       <div class="stat-label">Resumes Analysed</div>
     </div>
-  </div>
-  <div class="stat-card">
+  </a>
+  <a class="stat-card" href="{{ url_for('dashboard.jobs') }}">
     <div class="stat-icon stat-icon-purple"><i class="bi bi-briefcase"></i></div>
     <div class="stat-body">
       <div class="stat-value">{{ total_jobs }}</div>
       <div class="stat-label">Jobs in Database</div>
     </div>
-  </div>
-  <div class="stat-card">
+  </a>
+  <a class="stat-card" href="{{ url_for('dashboard.skills_view') }}">
     <div class="stat-icon stat-icon-green"><i class="bi bi-patch-check"></i></div>
     <div class="stat-body">
       <div class="stat-value">{{ all_skills | length }}</div>
       <div class="stat-label">Skills Detected</div>
     </div>
-  </div>
-  <div class="stat-card">
+  </a>
+  <a class="stat-card" href="{{ url_for('dashboard.index') }}#matches">
     <div class="stat-icon stat-icon-orange"><i class="bi bi-graph-up-arrow"></i></div>
     <div class="stat-body">
       <div class="stat-value">
@@ -37,7 +37,7 @@
       </div>
       <div class="stat-label">Top Match Score</div>
     </div>
-  </div>
+  </a>
 </div>
 
 
@@ -91,7 +91,6 @@
     </div>
 
     <!-- Detected Skills Card -->
-    {% if all_skills %}
     <div class="card dash-card mb-4">
       <div class="dash-card-header">
         <i class="bi bi-lightning-charge-fill me-2 text-warning"></i>
@@ -104,9 +103,35 @@
           <span class="skill-pill">{{ skill }}</span>
           {% endfor %}
         </div>
+
+        <!-- Manual skill input (can be global or attached to a resume) -->
+        <div class="alert alert-info small mb-3">
+          <i class="bi bi-lightbulb me-2"></i>
+          Want to add skills without uploading a resume?
+          <a href="{{ url_for('dashboard.manual') }}" class="alert-link">Use Manual Skills Matcher</a>
+        </div>
+
+        <form id="skill-add-form" method="POST" action="{{ url_for('dashboard.add_skill') }}" class="mt-3">
+          <div class="input-group">
+            <input type="text" name="skill" id="skill-input" class="form-control" placeholder="Type a skill and press Add" />
+            <select name="resume_id" id="resume-select" class="form-select">
+              <option value="">Global (no resume)</option>
+              {% for r in current_user.resumes.limit(5).all() %}
+              <option value="{{ r.id }}">{{ r.original_filename }} ({{ r.uploaded_at.strftime('%b %d') }})</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary" id="skill-add-btn">Add</button>
+            <button type="button" class="btn btn-outline-secondary ms-2" id="skill-check-btn">Check Jobs</button>
+          </div>
+        </form>
+
+        <!-- Hidden simple POST form to run manual-only matching (no persistence) -->
+        <form id="skill-check-form" method="POST" action="{{ url_for('dashboard.match_manual') }}" style="display:none">
+          <input type="hidden" name="temp_skill" id="temp-skill-field" value="" />
+          <input type="hidden" name="resume_id" id="temp-resume-field" value="" />
+        </form>
       </div>
     </div>
-    {% endif %}
 
     <!-- Skill Gap / Learning Roadmap -->
     {% if global_gap %}

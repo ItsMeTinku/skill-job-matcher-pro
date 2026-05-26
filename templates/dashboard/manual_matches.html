@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Manual Matches{% endblock %}
+{% block page_title %}Matches for Manual Skills{% endblock %}
+
+{% block dashboard_content %}
+<div class="card">
+  <div class="card-body">
+    <h5>Matches based on manual skills</h5>
+    {% if not matches %}
+      <p class="text-muted">No matches found. Try adding more skills.</p>
+    {% else %}
+      <div class="match-list">
+        {% for m in matches %}
+        <div class="match-card">
+          <div class="match-card-top">
+            <div class="match-job-info">
+              <div class="match-job-title">{{ m.job_title }}</div>
+              <div class="match-job-meta">
+                <span class="badge badge-category">{{ m.job_category }}</span>
+                <span class="badge bg-white text-dark">{{ m.experience_level }}</span>
+              </div>
+            </div>
+            <div class="match-score-ring">{{ m.match_score | round(0) }}%</div>
+          </div>
+
+          <div class="progress match-progress mb-3">
+            <div class="progress-bar" role="progressbar" style="width: {{ m.match_score }}%"></div>
+          </div>
+
+          {% if m.matched_skills %}
+          <div class="match-skills-row">
+            <span class="skills-row-label text-success"><i class="bi bi-check-circle-fill"></i> You have:</span>
+            <div class="skills-inline">
+              {% for s in m.matched_skills[:5] %}
+              <span class="skill-tag skill-tag-matched">{{ s }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {% if m.missing_skills %}
+          <div class="match-skills-row mt-1">
+            <span class="skills-row-label text-danger"><i class="bi bi-x-circle-fill"></i> Missing:</span>
+            <div class="skills-inline">
+              {% for s in m.missing_skills[:5] %}
+              <span class="skill-tag skill-tag-missing">{{ s }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+        </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -189,3 +189,31 @@ def string_to_skills(skills_str: str) -> list[str]:
     if not skills_str:
         return []
     return sorted({s.strip() for s in skills_str.split(",") if s.strip()})
+
+
+def normalize_skill(raw_skill: str) -> str:
+    """
+    Normalize a manually-entered skill to the canonical taxonomy where possible.
+
+    If no exact taxonomy match is found, return a cleaned, title-cased form.
+    """
+    if not raw_skill or not raw_skill.strip():
+        return ""
+
+    key = raw_skill.strip().lower()
+
+    # Build a quick lookup mapping from lowercased taxonomy to canonical name
+    taxonomy_map = {s.lower(): s for s in SKILL_TAXONOMY}
+
+    # Direct match
+    if key in taxonomy_map:
+        return taxonomy_map[key]
+
+    # Try simpler heuristics: substring match to longest taxonomy entry
+    candidates = [s for s in SKILL_TAXONOMY if key in s.lower()]
+    if candidates:
+        # prefer the longest match
+        return sorted(candidates, key=len, reverse=True)[0]
+
+    # Fallback: title case the user's input
+    return raw_skill.strip().title()

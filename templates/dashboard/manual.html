@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}Manual Skills Matcher{% endblock %}
+{% block page_title %}Manual Skills Matcher{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="dashboard-grid">
+
+  <!-- ── LEFT: Manual Skills Entry ────────────────────────────────── -->
+  <div class="dashboard-left">
+
+    <!-- Add Manual Skills Card -->
+    <div class="card dash-card mb-4">
+      <div class="dash-card-header">
+        <i class="bi bi-pencil-fill me-2 text-primary"></i>
+        Add Your Skills
+      </div>
+      <div class="dash-card-body">
+        <p class="text-muted small mb-3">
+          Add skills manually and get instant job matches. These skills don't require a resume upload.
+        </p>
+        
+        <form id="manual-skill-form" method="POST" action="{{ url_for('dashboard.add_skill') }}">
+          <div class="input-group mb-3">
+            <input 
+              type="text" 
+              name="skill" 
+              id="skill-input" 
+              class="form-control" 
+              placeholder="Type a skill (e.g., Python, React, AWS)" 
+              autocomplete="off"
+            />
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-plus-lg me-1"></i>Add Skill
+            </button>
+          </div>
+        </form>
+
+        {% if resumes %}
+        <div class="alert alert-info small mb-0">
+          <i class="bi bi-info-circle me-1"></i>
+          You can also attach skills to specific resumes using the selector in your <a href="{{ url_for('dashboard.skills_view') }}" class="alert-link">Skills</a> page.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Current Skills List -->
+    <div class="card dash-card">
+      <div class="dash-card-header">
+        <i class="bi bi-lightning-charge-fill me-2 text-warning"></i>
+        Your Manual Skills
+        <span class="badge bg-secondary ms-auto">{{ manual_skills_data | length }}</span>
+      </div>
+      <div class="dash-card-body">
+        {% if not manual_skills_data %}
+        <p class="text-muted text-center py-4">
+          <i class="bi bi-inbox me-2"></i>No manual skills yet. Add one above to get started!
+        </p>
+        {% else %}
+        <div class="skill-cloud">
+          {% for skill in manual_skills_data %}
+          <div class="skill-item-inline">
+            <span class="skill-pill">{{ skill.skill_name }}</span>
+            <form method="POST" action="{{ url_for('dashboard.remove_skill') }}" class="skill-remove-form">
+              <input type="hidden" name="skill_id" value="{{ skill.id }}" />
+              <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Remove skill">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT: Matched Jobs ──────────────────────────────────────── -->
+  <div class="dashboard-right">
+
+    <div class="card dash-card">
+      <div class="dash-card-header">
+        <i class="bi bi-briefcase-fill me-2 text-info"></i>
+        Matched Jobs
+        <span class="badge bg-secondary ms-auto">
+          {% if match_results %}{{ match_results | length }}{% else %}0{% endif %}
+        </span>
+      </div>
+      <div class="dash-card-body">
+
+        {% if not manual_skills_data %}
+        <div class="empty-state text-center py-5">
+          <div class="empty-icon mb-3"><i class="bi bi-search"></i></div>
+          <h5>No skills added yet</h5>
+          <p class="text-muted">Add skills on the left to see matching jobs here.</p>
+        </div>
+
+        {% elif not match_results %}
+        <div class="empty-state text-center py-5">
+          <div class="empty-icon mb-3"><i class="bi bi-inbox"></i></div>
+          <h5>No matches found</h5>
+          <p class="text-muted">Try adding different skills or check back later as new jobs are posted.</p>
+        </div>
+
+        {% else %}
+        <div class="match-list">
+          {% for match in match_results %}
+          <div class="match-card mb-3">
+            <div class="match-card-top mb-2">
+              <div class="match-job-info">
+                <div class="match-job-title">{{ match.job_title }}</div>
+                <div class="match-job-meta">
+                  <span class="badge badge-category">{{ match.job_category }}</span>
+                  <span class="badge bg-white text-dark">{{ match.experience_level }}</span>
+                </div>
+              </div>
+              <div class="match-score-ring">
+                <span class="score-value">{{ match.match_score | round(0) | int }}%</span>
+              </div>
+            </div>
+
+            <div class="progress match-progress mb-3" style="height: 6px;">
+              <div 
+                class="progress-bar" 
+                role="progressbar" 
+                style="width: {{ match.match_score }}%; background-color: {% if match.match_score >= 80 %}#28a745{% elif match.match_score >= 60 %}#ffc107{% else %}#6c757d{% endif %}"
+              ></div>
+            </div>
+
+            {% if match.matched_skills %}
+            <div class="match-skills-row mb-2">
+              <span class="skills-row-label text-success">
+                <i class="bi bi-check-circle-fill me-1"></i>You have:
+              </span>
+              <div class="skills-inline">
+                {% for skill in match.matched_skills[:5] %}
+                <span class="skill-tag skill-tag-matched small">{{ skill }}</span>
+                {% endfor %}
+                {% if match.matched_skills | length > 5 %}
+                <span class="skill-tag small text-muted">+{{ match.matched_skills | length - 5 }} more</span>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+
+            {% if match.missing_skills %}
+            <div class="match-skills-row">
+              <span class="skills-row-label text-danger">
+                <i class="bi bi-x-circle-fill me-1"></i>Missing:
+              </span>
+              <div class="skills-inline">
+                {% for skill in match.missing_skills[:5] %}
+                <span class="skill-tag skill-tag-missing small">{{ skill }}</span>
+                {% endfor %}
+                {% if match.missing_skills | length > 5 %}
+                <span class="skill-tag small text-muted">+{{ match.missing_skills | length - 5 }} more</span>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<style>
+  .skill-item-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 8px;
+    margin-bottom: 8px;
+  }
+
+  .skill-remove-form {
+    display: inline;
+  }
+
+  .match-card {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 14px;
+    background: #f8f9fa;
+    transition: all 0.2s ease;
+  }
+
+  .match-card:hover {
+    border-color: #dee2e6;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  .match-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .match-job-info {
+    flex: 1;
+  }
+
+  .match-job-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #1a202c;
+  }
+
+  .match-job-meta {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .match-score-ring {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    margin-left: 12px;
+  }
+
+  .score-value {
+    display: block;
+  }
+
+  .match-skills-row {
+    font-size: 13px;
+  }
+
+  .skills-row-label {
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .skills-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .skill-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: #e9ecef;
+    color: #495057;
+    font-size: 11px;
+  }
+
+  .skill-tag-matched {
+    background: #d4edda;
+    color: #155724;
+  }
+
+  .skill-tag-missing {
+    background: #f8d7da;
+    color: #721c24;
+  }
+
+  .empty-state {
+    padding: 40px 20px;
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    color: #dee2e6;
+  }
+
+  .match-list {
+    max-height: 800px;
+    overflow-y: auto;
+  }
+</style>
+
+{% endblock %}

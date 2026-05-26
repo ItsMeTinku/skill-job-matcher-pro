@@ -114,6 +114,20 @@ def analyze():
     db.session.add(resume)
     db.session.flush()   # get resume.id before committing
 
+    # Merge manual user skills (global + resume-specific) into the extracted skills
+    from models.user_skill import UserSkill
+    manual_q = (
+        UserSkill.query
+        .filter_by(user_id=current_user.id)
+        .filter((UserSkill.resume_id == None) | (UserSkill.resume_id == resume.id))
+        .all()
+    )
+    manual_skills = [u.skill_name for u in manual_q]
+    # merge unique skills
+    merged_skills_set = {s for s in skills_list}
+    merged_skills_set.update(manual_skills)
+    skills_list = sorted(merged_skills_set, key=str.lower)
+
     # ── 6. Load all active jobs ───────────────────────────────────────
     jobs = Job.query.filter_by(is_active=True).all()
 
