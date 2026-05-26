@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Sign In{% endblock %}
+
+{% block content %}
+<div class="auth-card-wrapper">
+
+  <!-- Brand -->
+  <div class="auth-brand">
+    <span class="auth-brand-icon"><i class="bi bi-cpu-fill"></i></span>
+    <span class="auth-brand-name">SkillMatch<strong>AI</strong></span>
+  </div>
+
+  <div class="auth-card">
+    <div class="auth-card-header">
+      <h1 class="auth-title">Welcome back</h1>
+      <p class="auth-subtitle">Sign in to your account to continue</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('auth.login') }}" class="auth-form" autocomplete="on">
+
+      <div class="form-group">
+        <label class="form-label" for="email">Email address</label>
+        <div class="input-icon-wrapper">
+          <i class="bi bi-envelope input-icon"></i>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            class="form-control form-input-icon"
+            placeholder="you@example.com"
+            value="{{ email | default('') }}"
+            required
+            autocomplete="email"
+          />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="password">Password</label>
+        <div class="input-icon-wrapper">
+          <i class="bi bi-lock input-icon"></i>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            class="form-control form-input-icon"
+            placeholder="••••••••"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-auth w-100">
+        <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+      </button>
+
+    </form>
+
+    <p class="auth-switch">
+      Don't have an account?
+      <a href="{{ url_for('auth.register') }}" class="auth-link">Create one free</a>
+    </p>
+  </div>
+
+  <p class="auth-footer">
+    Protected by industry-standard encryption &amp; rate limiting.
+  </p>
+</div>
+{% endblock %}

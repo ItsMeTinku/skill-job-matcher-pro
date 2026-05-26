@@ -1,0 +1,71 @@
+# ── Python ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ── Virtual environments ──────────────────────────────────────────
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ── Flask / App specific ──────────────────────────────────────────
+instance/
+uploads/
+*.db
+*.sqlite3
+*.sqlite
+
+# ── Secrets ───────────────────────────────────────────────────────
+.env
+*.pem
+*.key
+secrets.json
+
+# ── ML Model cache ────────────────────────────────────────────────
+.cache/
+huggingface/
+sentence_transformers/
+torch_cache/
+
+# ── IDE ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Testing ───────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ── Migrations (keep directory, ignore auto-generated) ───────────
+migrations/versions/

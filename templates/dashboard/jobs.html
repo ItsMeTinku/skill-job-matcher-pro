@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Browse Jobs{% endblock %}
+{% block page_title %}Browse Jobs{% endblock %}
+
+{% block content %}
+
+<!-- ── Filter Bar ─────────────────────────────────────────────────── -->
+<div class="card dash-card mb-4">
+  <div class="dash-card-body">
+    <form method="GET" action="{{ url_for('dashboard.jobs') }}" class="filter-form">
+      <div class="row g-3 align-items-end">
+
+        <div class="col-md-5">
+          <label class="form-label small fw-semibold text-muted">Search Jobs</label>
+          <div class="input-group">
+            <span class="input-group-text bg-card border-card">
+              <i class="bi bi-search"></i>
+            </span>
+            <input
+              type="text"
+              name="q"
+              class="form-control search-input"
+              placeholder="e.g. Python Developer"
+              value="{{ search_query }}"
+            />
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold text-muted">Category</label>
+          <select name="category" class="form-select search-input">
+            <option value="">All Categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>
+              {{ cat }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <button type="submit" class="btn btn-analyze w-100">
+            <i class="bi bi-funnel me-1"></i>Filter
+          </button>
+        </div>
+
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Results Count ─────────────────────────────────────────────── -->
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <p class="text-muted mb-0">
+    Showing <strong>{{ jobs_page.total }}</strong> job{% if jobs_page.total != 1 %}s{% endif %}
+    {% if search_query %}for "<strong>{{ search_query }}</strong>"{% endif %}
+    {% if selected_category %}in <strong>{{ selected_category }}</strong>{% endif %}
+  </p>
+  {% if search_query or selected_category %}
+  <a href="{{ url_for('dashboard.jobs') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-x me-1"></i>Clear filters
+  </a>
+  {% endif %}
+</div>
+
+<!-- ── Job Grid ───────────────────────────────────────────────────── -->
+{% if jobs_page.items %}
+<div class="jobs-grid">
+  {% for job in jobs_page.items %}
+  <div class="job-card">
+    <div class="job-card-header">
+      <div class="job-category-icon">
+        {% if 'Data' in job.category or 'ML' in job.category or 'Machine' in job.category %}
+          <i class="bi bi-graph-up-arrow"></i>
+        {% elif 'DevOps' in job.category or 'Cloud' in job.category %}
+          <i class="bi bi-cloud-fill"></i>
+        {% elif 'Security' in job.category %}
+          <i class="bi bi-shield-lock-fill"></i>
+        {% elif 'Mobile' in job.category %}
+          <i class="bi bi-phone-fill"></i>
+        {% elif 'Frontend' in job.category %}
+          <i class="bi bi-layout-text-window-reverse"></i>
+        {% elif 'Full Stack' in job.category %}
+          <i class="bi bi-stack"></i>
+        {% elif 'Blockchain' in job.category %}
+          <i class="bi bi-link-45deg"></i>
+        {% elif 'Game' in job.category %}
+          <i class="bi bi-controller"></i>
+        {% elif 'Design' in job.category %}
+          <i class="bi bi-palette-fill"></i>
+        {% else %}
+          <i class="bi bi-code-slash"></i>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="job-card-body">
+      <h5 class="job-title">{{ job.title }}</h5>
+      <div class="job-badges mb-2">
+        <span class="badge badge-category">{{ job.category }}</span>
+        {% if job.experience_level %}
+        <span class="badge badge-level-{{ job.badge_class }}">{{ job.experience_level }}</span>
+        {% endif %}
+      </div>
+      <p class="job-desc">{{ job.description[:120] }}…</p>
+
+      <div class="job-skills">
+        {% for skill in job.required_skills[:5] %}
+        <span class="skill-tag skill-tag-neutral">{{ skill }}</span>
+        {% endfor %}
+        {% if job.required_skills | length > 5 %}
+        <span class="skill-tag-more">+{{ job.required_skills | length - 5 }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Pagination ─────────────────────────────────────────────────── -->
+{% if jobs_page.pages > 1 %}
+<nav class="mt-4 d-flex justify-content-center" aria-label="Job listing pages">
+  <ul class="pagination pagination-custom">
+
+    {% if jobs_page.has_prev %}
+    <li class="page-item">
+      <a class="page-link"
+         href="{{ url_for('dashboard.jobs', page=jobs_page.prev_num, q=search_query, category=selected_category) }}">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+    </li>
+    {% endif %}
+
+    {% for p in jobs_page.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+      <li class="page-item {% if p == jobs_page.page %}active{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('dashboard.jobs', page=p, q=search_query, category=selected_category) }}">
+          {{ p }}
+        </a>
+      </li>
+      {% else %}
+      <li class="page-item disabled"><span class="page-link">…</span></li>
+      {% endif %}
+    {% endfor %}
+
+    {% if jobs_page.has_next %}
+    <li class="page-item">
+      <a class="page-link"
+         href="{{ url_for('dashboard.jobs', page=jobs_page.next_num, q=search_query, category=selected_category) }}">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </li>
+    {% endif %}
+
+  </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<!-- Empty state -->
+<div class="text-center py-5">
+  <div class="empty-icon mb-3"><i class="bi bi-briefcase-x"></i></div>
+  <h5>No jobs found</h5>
+  <p class="text-muted">Try different search terms or remove the category filter.</p>
+  <a href="{{ url_for('dashboard.jobs') }}" class="btn btn-outline-primary btn-sm">
+    View all jobs
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

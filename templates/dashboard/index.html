@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- ── Stats Row ─────────────────────────────────────────────────── -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-icon stat-icon-blue"><i class="bi bi-file-earmark-person"></i></div>
+    <div class="stat-body">
+      <div class="stat-value">{{ total_resumes }}</div>
+      <div class="stat-label">Resumes Analysed</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon stat-icon-purple"><i class="bi bi-briefcase"></i></div>
+    <div class="stat-body">
+      <div class="stat-value">{{ total_jobs }}</div>
+      <div class="stat-label">Jobs in Database</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon stat-icon-green"><i class="bi bi-patch-check"></i></div>
+    <div class="stat-body">
+      <div class="stat-value">{{ all_skills | length }}</div>
+      <div class="stat-label">Skills Detected</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon stat-icon-orange"><i class="bi bi-graph-up-arrow"></i></div>
+    <div class="stat-body">
+      <div class="stat-value">
+        {% if top_matches %}
+          {{ top_matches[0].score_int }}%
+        {% else %}—{% endif %}
+      </div>
+      <div class="stat-label">Top Match Score</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Main grid ──────────────────────────────────────────────────── -->
+<div class="dashboard-grid">
+
+  <!-- ── LEFT: Upload + Skills ──────────────────────────────────── -->
+  <div class="dashboard-left">
+
+    <!-- Upload Card -->
+    <div class="card dash-card mb-4">
+      <div class="dash-card-header">
+        <i class="bi bi-cloud-upload-fill me-2 text-primary"></i>
+        Analyse Your Resume
+      </div>
+      <div class="dash-card-body">
+        <form
+          method="POST"
+          action="{{ url_for('analysis.analyze') }}"
+          enctype="multipart/form-data"
+          class="upload-form"
+        >
+          <label class="upload-zone" for="resume_file">
+            <i class="bi bi-file-earmark-arrow-up upload-icon"></i>
+            <span class="upload-title">Drop your resume here</span>
+            <span class="upload-sub">PDF or DOCX, max 10 MB</span>
+            <input
+              type="file"
+              id="resume_file"
+              name="resume_file"
+              accept=".pdf,.docx"
+              required
+              class="upload-input"
+            />
+          </label>
+          <button type="submit" class="btn btn-analyze w-100 mt-3">
+            <i class="bi bi-cpu me-2"></i>Run AI Analysis
+          </button>
+        </form>
+
+        {% if latest_resume %}
+        <div class="last-upload-info mt-3">
+          <i class="bi bi-clock-history me-1"></i>
+          Last uploaded: <strong>{{ latest_resume.original_filename }}</strong>
+          <span class="text-muted small ms-1">
+            ({{ latest_resume.uploaded_at.strftime('%b %d, %Y') }})
+          </span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Detected Skills Card -->
+    {% if all_skills %}
+    <div class="card dash-card mb-4">
+      <div class="dash-card-header">
+        <i class="bi bi-lightning-charge-fill me-2 text-warning"></i>
+        Detected Skills
+        <span class="badge bg-secondary ms-auto">{{ all_skills | length }}</span>
+      </div>
+      <div class="dash-card-body">
+        <div class="skill-cloud">
+          {% for skill in all_skills %}
+          <span class="skill-pill">{{ skill }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Skill Gap / Learning Roadmap -->
+    {% if global_gap %}
+    <div class="card dash-card">
+      <div class="dash-card-header">
+        <i class="bi bi-map-fill me-2 text-danger"></i>
+        Learning Roadmap
+        <span class="badge bg-danger ms-auto">{{ global_gap | length }} gaps</span>
+      </div>
+      <div class="dash-card-body">
+        <p class="text-muted small mb-3">
+          Most frequently required skills missing from your profile:
+        </p>
+        <div class="skill-cloud">
+          {% for skill in global_gap %}
+          <span class="skill-pill skill-pill-missing">
+            <i class="bi bi-plus-circle me-1"></i>{{ skill }}
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+
+  <!-- ── RIGHT: Top Job Matches ──────────────────────────────────── -->
+  <div class="dashboard-right">
+
+    {% if not latest_resume %}
+    <!-- Empty state -->
+    <div class="card dash-card empty-state-card">
+      <div class="dash-card-body text-center py-5">
+        <div class="empty-icon"><i class="bi bi-cpu"></i></div>
+        <h4 class="mt-3">No analysis yet</h4>
+        <p class="text-muted">
+          Upload your resume on the left to run the AI matching engine.
+        </p>
+      </div>
+    </div>
+
+    {% else %}
+
+    <!-- Top Match Banner -->
+    {% if top_matches %}
+    {% set best = top_matches[0] %}
+    <div class="card best-match-card mb-4">
+      <div class="best-match-body">
+        <div class="best-match-label">
+          <i class="bi bi-trophy-fill me-1"></i> Top Match
+        </div>
+        <div class="best-match-title">{{ best.job.title }}</div>
+        <div class="best-match-meta">
+          <span class="badge bg-white text-dark me-2">{{ best.job.category }}</span>
+          <span class="badge bg-white text-dark">{{ best.job.experience_level }}</span>
+        </div>
+        <div class="best-match-score">{{ best.score_int }}% match</div>
+        <div class="progress best-match-progress">
+          <div
+            class="progress-bar progress-bar-striped"
+            style="width: {{ best.match_score }}%"
+          ></div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Job Search (server-side) -->
+    <form method="GET" action="{{ url_for('dashboard.jobs') }}" class="search-form mb-4">
+      <div class="input-group">
+        <span class="input-group-text bg-card border-card">
+          <i class="bi bi-search"></i>
+        </span>
+        <input
+          type="text"
+          name="q"
+          class="form-control search-input"
+          placeholder="Search all jobs…"
+        />
+        <button class="btn btn-search" type="submit">Search</button>
+      </div>
+    </form>
+
+    <!-- Match List -->
+    <div class="match-list">
+      {% for match in top_matches %}
+      <div class="match-card">
+        <div class="match-card-top">
+          <div class="match-job-info">
+            <div class="match-job-title">{{ match.job.title }}</div>
+            <div class="match-job-meta">
+              <span class="badge badge-category">{{ match.job.category }}</span>
+              <span class="badge badge-level-{{ match.job.badge_class }}">
+                {{ match.job.experience_level }}
+              </span>
+            </div>
+          </div>
+          <div class="match-score-ring {{ match.score_badge_class }}">
+            {{ match.score_int }}%
+          </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="progress match-progress mb-3">
+          <div
+            class="progress-bar {{ match.progress_class }}"
+            role="progressbar"
+            style="width: {{ match.match_score }}%"
+            aria-valuenow="{{ match.score_int }}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          ></div>
+        </div>
+
+        <!-- Matched skills -->
+        {% if match.matched_skills %}
+        <div class="match-skills-row">
+          <span class="skills-row-label text-success">
+            <i class="bi bi-check-circle-fill"></i> You have:
+          </span>
+          <div class="skills-inline">
+            {% for s in match.matched_skills[:5] %}
+            <span class="skill-tag skill-tag-matched">{{ s }}</span>
+            {% endfor %}
+            {% if match.matched_skills | length > 5 %}
+            <span class="skill-tag-more">+{{ match.matched_skills | length - 5 }} more</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Missing skills -->
+        {% if match.missing_skills %}
+        <div class="match-skills-row mt-1">
+          <span class="skills-row-label text-danger">
+            <i class="bi bi-x-circle-fill"></i> Missing:
+          </span>
+          <div class="skills-inline">
+            {% for s in match.missing_skills[:4] %}
+            <span class="skill-tag skill-tag-missing">{{ s }}</span>
+            {% endfor %}
+            {% if match.missing_skills | length > 4 %}
+            <span class="skill-tag-more">+{{ match.missing_skills | length - 4 }} more</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="match-footer">
+          <span class="match-label {{ match.score_badge_class }}">{{ match.score_label }}</span>
+          <span class="match-semantic text-muted small">
+            Semantic: {{ (match.semantic_score * 100) | int }}% ·
+            Keyword: {{ match.keyword_score | int }}%
+          </span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="text-center mt-3">
+      <a href="{{ url_for('dashboard.jobs') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-briefcase me-1"></i>View All {{ total_jobs }} Jobs
+      </a>
+    </div>
+
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
