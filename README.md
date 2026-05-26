@@ -340,7 +340,73 @@ WEB_CONCURRENCY=2
 
 ---
 
-## 🔒 Security Design
+## � Bug Fixes & Version Updates
+
+### Fix 1 — Resume-attached manual skills were saved as global only
+**Old version**
+```js
+const payload = {
+  skill: skill,
+  resume_id: '',
+};
+```
+**New version**
+```js
+const resumeSelect = document.getElementById('resume-select');
+const payload = {
+  skill: skill,
+  resume_id: resumeSelect ? resumeSelect.value : '',
+};
+```
+This fix ensures manually-entered skills are saved against the selected resume, not only the global manual bucket.
+
+### Fix 2 — `sql` was normalized to `Microsoft SQL Server`
+**Old version**
+```python
+# In utils/skill_extractor.py
+"PostgreSQL", "MySQL", "SQLite", "MongoDB", "Redis",
+"Cassandra", "DynamoDB", "Elasticsearch", "Neo4j",
+"Oracle Database", "Microsoft SQL Server", "MariaDB",
+```
+**New version**
+```python
+# In utils/skill_extractor.py
+"PostgreSQL", "MySQL", "SQLite", "SQL", "MongoDB", "Redis",
+"Cassandra", "DynamoDB", "Elasticsearch", "Neo4j",
+"Oracle Database", "Microsoft SQL Server", "MariaDB",
+```
+Plus a normalize fallback:
+```python
+if key == "sql":
+    return "SQL"
+```
+This ensures plain `sql` is treated as generic SQL, not automatically rewritten as Microsoft SQL Server.
+
+### Fix 3 — Match percentage could be too low even on full keyword match
+**Old version**
+```python
+blended = (0.60 * semantic_pct) + (0.40 * keyword_score)
+```
+**New version**
+```python
+if job_skills_lower and len(matched) == len(job_skills_lower):
+    blended = 100.0
+else:
+    blended = (0.60 * semantic_pct) + (0.40 * keyword_score)
+    blended = max(blended, keyword_score)
+```
+Also the dashboard now renders the `effective_score` for stored matches, guaranteeing accurate percent display.
+
+## ✨ New Features Added
+- `Manual Skills Matcher` page for adding skills and viewing instant job matches
+- Resume selector in manual skill entry, so skills are attached to the correct resume
+- `SQL` generic skill support in the taxonomy
+- Local development fallback to SQLite in `DevelopmentConfig`
+- Better style and user feedback for resume-specific manual skills
+
+---
+
+## �🔒 Security Design
 
 ### Password Storage
 Passwords are hashed using Werkzeug's `generate_password_hash` with the PBKDF2-SHA256 algorithm and a random salt. The raw password is never stored or logged anywhere in the application.

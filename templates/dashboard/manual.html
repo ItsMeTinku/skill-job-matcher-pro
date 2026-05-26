@@ -17,7 +17,7 @@
       </div>
       <div class="dash-card-body">
         <p class="text-muted small mb-3">
-          Add skills manually and get instant job matches. These skills don't require a resume upload.
+          Add skills manually and get instant job matches. These skills can be global or attached to a selected resume.
           You can enter multiple skills at once by separating them with commas.
         </p>
         
@@ -31,7 +31,13 @@
               placeholder="Type skills separated by commas (e.g., Java, Python, CSS)" 
               autocomplete="off"
             />
-            <button type="submit" class="btn btn-primary">
+            <select name="resume_id" id="resume-select" class="form-select ms-2">
+              <option value="">Global (no resume)</option>
+              {% for r in resumes %}
+              <option value="{{ r.id }}">Attach to resume: {{ r.original_filename }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary ms-2">
               <i class="bi bi-plus-lg me-1"></i>Add Skills
             </button>
           </div>
@@ -40,7 +46,7 @@
         {% if resumes %}
         <div class="alert alert-info small mb-0">
           <i class="bi bi-info-circle me-1"></i>
-          You can also attach skills to specific resumes using the selector in your <a href="{{ url_for('dashboard.skills_view') }}" class="alert-link">Skills</a> page.
+          Select a resume above to attach skills directly to that resume.
         </div>
         {% endif %}
       </div>
@@ -61,8 +67,14 @@
         {% else %}
         <div class="skill-cloud">
           {% for skill in manual_skills_data %}
+          {% set attached_resume = resumes | selectattr('id','equalto', skill.resume_id) | list | first %}
           <div class="skill-item-inline">
             <span class="skill-pill">{{ skill.skill_name }}</span>
+            {% if skill.resume_id %}
+            <span class="badge bg-info text-dark small ms-1">Resume: {{ attached_resume.original_filename if attached_resume else skill.resume_id }}</span>
+            {% else %}
+            <span class="badge bg-secondary text-white small ms-1">Global</span>
+            {% endif %}
             <form method="POST" action="{{ url_for('dashboard.remove_skill') }}" class="skill-remove-form">
               <input type="hidden" name="skill_id" value="{{ skill.id }}" />
               <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Remove skill">

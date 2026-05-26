@@ -14,9 +14,10 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
+      const resumeSelect = document.getElementById('resume-select');
       const payload = {
         skill: skill,
-        resume_id: '',
+        resume_id: resumeSelect ? resumeSelect.value : '',
       };
 
       try {
