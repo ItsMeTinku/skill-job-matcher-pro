@@ -65,36 +65,53 @@ class MatchResult(db.Model):
 
     # ── Display helpers ───────────────────────────────────────────────
     @property
+    def effective_score(self) -> float:
+        """Return the most accurate display score, overriding stored match score when needed."""
+        if self.job and self.job.required_skills:
+            required_lower = {s.lower() for s in self.job.required_skills}
+            matched_lower = {s.lower() for s in self.matched_skills}
+            if required_lower and required_lower <= matched_lower:
+                return 100.0
+
+        if self.keyword_score is not None:
+            return max(self.match_score, self.keyword_score)
+
+        return self.match_score
+
+    @property
     def score_int(self) -> int:
-        return int(round(self.match_score))
+        return int(round(self.effective_score))
 
     @property
     def score_label(self) -> str:
-        if self.match_score >= 75:
+        score = self.effective_score
+        if score >= 75:
             return "Excellent"
-        if self.match_score >= 55:
+        if score >= 55:
             return "Good"
-        if self.match_score >= 35:
+        if score >= 35:
             return "Fair"
         return "Low"
 
     @property
     def score_badge_class(self) -> str:
-        if self.match_score >= 75:
+        score = self.effective_score
+        if score >= 75:
             return "badge-excellent"
-        if self.match_score >= 55:
+        if score >= 55:
             return "badge-good"
-        if self.match_score >= 35:
+        if score >= 35:
             return "badge-fair"
         return "badge-low"
 
     @property
     def progress_class(self) -> str:
-        if self.match_score >= 75:
+        score = self.effective_score
+        if score >= 75:
             return "progress-excellent"
-        if self.match_score >= 55:
+        if score >= 55:
             return "progress-good"
-        if self.match_score >= 35:
+        if score >= 35:
             return "progress-fair"
         return "progress-low"
 

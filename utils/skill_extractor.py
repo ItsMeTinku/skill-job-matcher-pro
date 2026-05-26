@@ -45,7 +45,7 @@ SKILL_TAXONOMY: list[str] = [
     "SwiftUI", "Xcode", "Kotlin Multiplatform",
 
     # ── Databases ──────────────────────────────────────────────────
-    "PostgreSQL", "MySQL", "SQLite", "MongoDB", "Redis",
+    "PostgreSQL", "MySQL", "SQLite", "SQL", "MongoDB", "Redis",
     "Cassandra", "DynamoDB", "Elasticsearch", "Neo4j",
     "Oracle Database", "Microsoft SQL Server", "MariaDB",
     "Firebase", "Supabase", "PlanetScale",
@@ -208,6 +208,10 @@ def normalize_skill(raw_skill: str) -> str:
     # Direct match
     if key in taxonomy_map:
         return taxonomy_map[key]
+
+    # Common generic fallback for SQL.
+    if key == "sql":
+        return "SQL"
 
     # Try simpler heuristics: substring match to longest taxonomy entry
     candidates = [s for s in SKILL_TAXONOMY if key in s.lower()]

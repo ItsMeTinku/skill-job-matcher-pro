@@ -60,10 +60,12 @@ class DevelopmentConfig(BaseConfig):
     TESTING = False
     SESSION_COOKIE_SECURE = False
 
-    # Prefer DATABASE_URL from .env; fall back to local PostgreSQL
+    # Prefer DATABASE_URL from .env; fall back to local SQLite for easy setup
+    default_sqlite_path = os.path.join(BASE_DIR, "instance", "dev.sqlite")
+    default_sqlite_uri = f"sqlite:///{default_sqlite_path.replace('\\', '/') }"
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/skill_job_matcher_dev"
+        default_sqlite_uri
     )
 
 

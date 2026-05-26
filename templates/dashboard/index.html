@@ -193,7 +193,7 @@
         <div class="progress best-match-progress">
           <div
             class="progress-bar progress-bar-striped"
-            style="width: {{ best.match_score }}%"
+            style="width: {{ best.effective_score }}%"
           ></div>
         </div>
       </div>
@@ -240,7 +240,7 @@
           <div
             class="progress-bar {{ match.progress_class }}"
             role="progressbar"
-            style="width: {{ match.match_score }}%"
+            style="width: {{ match.effective_score }}%"
             aria-valuenow="{{ match.score_int }}"
             aria-valuemin="0"
             aria-valuemax="100"

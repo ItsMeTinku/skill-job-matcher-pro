@@ -10,6 +10,7 @@ Main user dashboard after login:
 
 import logging
 import os
+import re
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
@@ -184,23 +185,36 @@ def add_skill():
         flash("Please enter a skill to add.", "warning")
         return redirect(url_for("dashboard.index"))
 
-    skill = normalize_skill(raw_skill)
+    skills = [normalize_skill(s) for s in re.split(r"[;,\n]+", raw_skill) if s.strip()]
+    if not skills:
+        if request.is_json:
+            return jsonify({"ok": False, "error": "empty skill"}), 400
+        flash("Please enter a valid skill to add.", "warning")
+        return redirect(url_for("dashboard.index"))
 
-    us = UserSkill(user_id=current_user.id, resume_id=resume_id, skill_name=skill)
-    db.session.add(us)
+    added_skills = []
+    for skill in skills:
+        us = UserSkill(user_id=current_user.id, resume_id=resume_id, skill_name=skill)
+        db.session.add(us)
+        added_skills.append(us)
+
     try:
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
         if request.is_json:
             return jsonify({"ok": False, "error": "db"}), 500
-        flash("Failed to add skill. Please try again.", "danger")
+        flash("Failed to add skill(s). Please try again.", "danger")
         return redirect(url_for("dashboard.index"))
 
+    added_names = [us.skill_name for us in added_skills]
     if request.is_json:
-        return jsonify({"ok": True, "skill": skill, "id": us.id})
+        return jsonify({"ok": True, "skills": added_names, "count": len(added_names)})
 
-    flash(f"Skill added: {skill}", "success")
+    if len(added_names) == 1:
+        flash(f"Skill added: {added_names[0]}", "success")
+    else:
+        flash(f"Added {len(added_names)} skills: {', '.join(added_names)}", "success")
     return redirect(url_for("dashboard.skills_view"))
 
 
@@ -309,7 +323,8 @@ def match_manual():
 
     manual_skills = [u.skill_name for u in q.all()]
     if temp_skill:
-        manual_skills.append(normalize_skill(temp_skill))
+        temp_skills = [normalize_skill(s) for s in re.split(r"[;,\n]+", temp_skill) if s.strip()]
+        manual_skills.extend(temp_skills)
 
     # Load jobs and run matcher
     jobs = Job.query.filter_by(is_active=True).all()

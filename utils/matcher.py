@@ -144,8 +144,14 @@ def match_resume_to_jobs(
         semantic_score = float(semantic_scores[idx])
         semantic_pct   = semantic_score * 100
 
-        # ── Blended score: 60% semantic + 40% keyword ─────────────────
-        blended = (0.60 * semantic_pct) + (0.40 * keyword_score)
+        # ── If all required skills are matched exactly, treat as a perfect match.
+        # This prevents a low semantic embedding score from incorrectly downgrading
+        # an exact skills match in manual skill entry mode.
+        if job_skills_lower and len(matched) == len(job_skills_lower):
+            blended = 100.0
+        else:
+            blended = (0.60 * semantic_pct) + (0.40 * keyword_score)
+            blended = max(blended, keyword_score)
 
         # ── Canonical casing for display ──────────────────────────────
         matched_display = _restore_casing(matched, job.required_skills)

@@ -17,7 +17,7 @@ def create_app(config_name: str = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
     # ── Configuration ────────────────────────────────────────────────
-    cfg = get_config(config_name or os.getenv("FLASK_ENV", "production"))
+    cfg = get_config(config_name or os.getenv("FLASK_ENV", "development"))
     app.config.from_object(cfg)
 
     # Ensure the upload folder exists
