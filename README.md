@@ -1,1201 +1,480 @@
-# 🤖 SkillMatch AI — V1 → V2 Upgrade Notes
+<div align="center">
 
-> This document explains every bug that was found and fixed, every improvement
-> made, and shows the exact **before vs after** code so you can see precisely
-> what changed and why.
+# Skill Job Matcher Pro
 
----
+### AI-Powered Semantic Recruitment & Career Intelligence Platform
 
-## 🚀 Live Demo
-**Repository:** [github.com/YOUR_USERNAME/skill-job-matcher](https://github.com/YOUR_USERNAME/skill-job-matcher)
-**Demo credentials:** Register a free account on first run — no invite needed.
+*Matching candidates to opportunities through contextual understanding — not keyword coincidence.*
 
 ---
 
-## 📋 Table of Contents
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=flat-square&logo=flask&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
+![AI](https://img.shields.io/badge/AI-SentenceTransformers-FF6F00?style=flat-square&logo=pytorch&logoColor=white)
+![NLP](https://img.shields.io/badge/NLP-Semantic_Embeddings-8B5CF6?style=flat-square)
+![Security](https://img.shields.io/badge/Security-Rate_Limited_Auth-DC2626?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Production_Ready-0EA5E9?style=flat-square)
 
-1. [🏗️ System Architecture](#architecture)
-2. [⚡ Quick Summary](#summary)
-3. [🐛 Bug Fix 1 — `ModuleNotFoundError` on First Run](#bug1)
-4. [🐛 Bug Fix 2 — Auth Layout Broken / Sidebar Visible on Login Page](#bug2)
-5. [🐛 Bug Fix 3 — Dashboard Crashed for New Users with No Resume](#bug3)
-6. [🐛 Bug Fix 4 — No Way to Match Jobs Without a Resume File](#bug4)
-7. [🐛 Bug Fix 5 — Bulk Skill Entry Saved as One String](#bug5)
-8. [🐛 Bug Fix 6 — Match Score Showed Lower Than Actual](#bug6)
-9. [🐛 Bug Fix 7 — `psycopg2-binary` Failed to Install on Python 3.13](#bug7)
-10. [✨ Improvement 1 — Manual Skill Entry System](#imp1)
-11. [✨ Improvement 2 — `normalize_skill()` Maps Free Text to Taxonomy](#imp2)
-12. [✨ Improvement 3 — Resume Delete with File Cleanup](#imp3)
-13. [✨ Improvement 4 — SQLite Dev Fallback (No DB Server Needed)](#imp4)
-14. [✨ Improvement 5 — Manual-Only Matching (No Upload Required)](#imp5)
-15. [📁 File-by-File Summary](#files)
-16. [⚙️ Setup & Installation](#setup)
-17. [🔒 Security Notes](#security)
-
----
-
-<a name="architecture"></a>
-## 🏗️ System Architecture
-
-### Architecture Overview
-
-The application is a production-grade Flask web platform using a 3-tier architecture:
-server-side rendered HTML via Jinja2, a Python business logic layer, and a PostgreSQL
-backend hosted on Supabase (with an automatic SQLite fallback for local development).
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Browser (HTML / CSS)                           │
-│               Flask / Jinja2 Server-Side Rendering                  │
-│                    Zero JavaScript required                         │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │ HTTP / HTTPS
-┌───────────────────────────▼─────────────────────────────────────────┐
-│                    Gunicorn WSGI Server                             │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                      Flask Application                       │   │
-│  │                   (Application Factory)                      │   │
-│  │                                                              │   │
-│  │   auth_bp          dashboard_bp         analysis_bp          │   │
-│  │   /login           /dashboard           /analyze             │   │
-│  │   /register        /jobs                (AI pipeline)        │   │
-│  │   /logout          /profile                                  │   │
-│  │                    /skills  ← NEW V2                         │   │
-│  │                    /manual  ← NEW V2                         │   │
-│  │                    /resume/<id>/delete ← NEW V2              │   │
-│  └──────────────────────────┬───────────────────────────────────┘   │
-└─────────────────────────────┼───────────────────────────────────────┘
-                              │
-              ┌───────────────▼────────────────┐
-              │         Utils Layer            │
-              │  parser.py                     │
-              │  skill_extractor.py            │
-              │  matcher.py                    │
-              └───────────────┬────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────────┐
-│                       Database Layer                                │
-│     PostgreSQL via Supabase (prod)  /  SQLite (dev fallback)        │
-│                                                                     │
-│   users ──────┐                                                     │
-│   resumes ────┼──── match_results                                   │
-│   jobs ───────┘                                                     │
-│   user_skills  ← NEW V2                                             │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### AI Matching Pipeline
-
-```
-Resume Upload (PDF / DOCX)          Manual Skill Entry ← NEW V2
-         │                                   │
-         ▼                                   ▼
-   Resume Parser                      normalize_skill()
-   pdfplumber / python-docx           taxonomy lookup →
-         │                            canonical name
-         ▼                                   │
-   Raw Text Extraction                       │
-         │                                   │
-         └─────────────┬─────────────────────┘
-                       │  MERGED SKILL LIST (V2)
-                       │
-         ┌─────────────┴───────────────────────────────┐
-         ▼                                             ▼
-  NLP Skill Extractor                      SentenceTransformer
-  330+ taxonomy                            all-MiniLM-L6-v2
-  boundary-aware regex                     384-dim embedding
-         │                                             │
-         ▼                                             ▼
-  Extracted Skills List                  Resume Embedding Vector
-         │                                             │
-         └────────────────────┬────────────────────────┘
-                              │
-                 For each Job in database:
-                   ├─ Generate Job Embedding Vector
-                   ├─ Cosine Similarity  →  semantic_score (0–1)
-                   ├─ Keyword Overlap    →  keyword_score  (0–100)
-                   ├─ Blended Score       = 60% semantic + 40% keyword
-                   └─ effective_score()  corrects underreported full-coverage ← NEW V2
-                              │
-                              ▼
-                    Ranked Match Results
-                    Per-job missing skills
-                    Global Learning Roadmap
-                              │
-                              ▼
-                    Persisted to PostgreSQL
-                    Server-side rendered dashboard
-```
-
-### Authentication & Session Flow
-
-```
-User fills login form
-         │
-         ▼
-routes/auth.py login()
-         │
-         ├── Query User by email
-         ├── check_password_hash(stored_hash, plain_text)
-         ├── Update user.last_login timestamp
-         └── Flask-Login: login_user(user)
-                   │
-                   ▼
-           Signed session cookie
-           (HTTP-only, SameSite=Lax)
-                   │
-                   ▼
-         Redirect → /dashboard
-                   │
-         Every protected route:
-         @login_required decorator
-         checks Flask-Login cookie
-                   │
-         /logout → logout_user()
-                   clears session
-                   redirect → /login
-```
-
-### Module Structure
-
-- `app.py` — Application factory, blueprint registration, DB seeding, error handlers
-- `config.py` — `DevelopmentConfig` / `ProductionConfig` / `TestingConfig`
-- `extensions.py` — `db`, `limiter`, `login_manager` singletons (prevents circular imports)
-- `wsgi.py` + `gunicorn.conf.py` — Production WSGI entry and tuned Gunicorn config
-- **Models:** `user.py`, `resume.py`, `job.py`, `match.py`, `user_skill.py` ← new V2
-- **Routes:** `auth.py`, `dashboard.py`, `analysis.py`
-- **Utils:** `parser.py`, `skill_extractor.py`, `matcher.py`
-- **Data:** `data/jobs.py` — 25 job descriptions, auto-seeded on first startup
-
----
-
-<a name="summary"></a>
-## ⚡ Quick Summary
-
-| # | Type | Problem | Fix |
-|---|------|---------|-----|
-| 1 | 🐛 Bug | `ModuleNotFoundError: flask_sqlalchemy` on first run | Install deps in active venv with `pip install -r requirements.txt` |
-| 2 | 🐛 Bug | Sidebar rendered on login/register page — layout completely broken | Split `base.html` into two separate layout branches |
-| 3 | 🐛 Bug | Dashboard crashed with `UndefinedError` for new users with no resume | Added `{% if %}` guards in all three dashboard templates |
-| 4 | 🐛 Bug | No way to use the platform without uploading a resume file | Built complete `UserSkill` model + manual entry system |
-| 5 | 🐛 Bug | "Python, Flask, Docker" saved as one skill string instead of three | Added `re.split(r"[;,\n]+", ...)` bulk parsing in `add_skill()` |
-| 6 | 🐛 Bug | Match score showed 67% when candidate had 100% of required skills | Added `effective_score` property — corrects blended-score underreporting |
-| 7 | 🐛 Bug | `psycopg2-binary` failed to build on Python 3.13 / Windows | Switched to `psycopg[binary]` (psycopg3) |
-| 8 | ✨ New | No way to add skills without uploading a document | Full manual skill CRUD — global or resume-scoped, bulk entry |
-| 9 | ✨ New | Typed skill names not matched to taxonomy | `normalize_skill()` — exact → substring → title-case fallback |
-| 10 | ✨ New | Deleted resume left orphan files on disk | `delete_resume()` route — DB cascade + file removal |
-| 11 | ✨ New | Required PostgreSQL server to run locally | SQLite auto-fallback in `DevelopmentConfig` |
-| 12 | ✨ New | Manual skills ignored during AI analysis | Manual skills merged into extracted skills before matching runs |
-| 13 | ✨ New | `use_reloader=True` loaded ML model twice on Windows | `use_reloader=False` added to `app.run()` |
-
----
-
-<a name="bug1"></a>
-## 🐛 Bug Fix 1 — `ModuleNotFoundError` on First Run
-
-### What Was Happening
-Running `python app.py` immediately crashed before the server could start,
-showing this error:
-
-```
-File "app.py", line 10, in <module>
-    from extensions import db, limiter, login_manager
-File "extensions.py", line 9, in <module>
-    from flask_sqlalchemy import SQLAlchemy
-ModuleNotFoundError: No module named 'flask_sqlalchemy'
-```
-
-### Why It Happened
-The `requirements.txt` lists what the project needs — but it does not install
-anything automatically. The packages had to be installed manually into the
-active virtual environment. Running `python app.py` before `pip install` means
-Python has none of the third-party libraries available.
-
-### V1 — What Was Missing
-
-```bash
-# ❌ What most people did first — ran the app before installing anything
-python app.py
-
-# Result:
-# ModuleNotFoundError: No module named 'flask_sqlalchemy'
-```
-
-### V2 — Correct Startup Sequence
-
-```bash
-# ✅ Step 1 — Create and activate a virtual environment
-python -m venv venv
-venv\Scripts\activate          # Windows
-source venv/bin/activate       # macOS / Linux
-
-# ✅ Step 2 — Install all dependencies into the venv
-pip install -r requirements.txt
-
-# ✅ Step 3 — Now run the app
-python app.py
-```
-
-### Result After Fix
-
-| Scenario | V1 | V2 |
-|----------|----|----|
-| Run without venv activated | ❌ `ModuleNotFoundError` | ✅ Works if packages installed globally |
-| Run without `pip install` | ❌ Crashes immediately | ✅ README now shows exact steps first |
-| Run after `pip install -r requirements.txt` | ✅ Works | ✅ Works |
-
----
-
-<a name="bug2"></a>
-## 🐛 Bug Fix 2 — Auth Layout Broken / Sidebar Visible on Login Page
-
-### What Was Happening
-After installing dependencies and opening the app, the login and register pages
-were completely broken. The dark sidebar appeared on the left side of the login
-form. The page header said "Dashboard" on the login screen. The layout looked
-like a logged-in state had leaked into the guest view.
-
-### Why It Happened
-The `base.html` template had a single `{% if current_user.is_authenticated %}`
-check to conditionally show the sidebar — but the HTML structure was not cleanly
-separated into two independent branches. The sidebar `<div>` wrapper was opened
-inside the `if` block but the main content `<div>` was outside it, causing both
-blocks to partially render regardless of authentication state.
-
-Also, `app.run(debug=True)` without `use_reloader=False` caused the Werkzeug
-reloader to spin up two processes on Windows, loading the sentence-transformer
-model twice and causing race conditions with template rendering on startup.
-
-### V1 Code (Broken)
-
-```html
-<!-- base.html — V1 -->
-<body>
-
-{% if current_user.is_authenticated %}
-<div class="app-wrapper">
-  <aside class="sidebar">
-    ...sidebar content...
-  </aside>
-{% endif %}
-
-<!-- ❌ This <main> renders for EVERYONE — guests and logged-in users alike -->
-<main class="main-content">
-  {% block content %}{% endblock %}
-</main>
-
-</div>   <!-- closes app-wrapper but is OUTSIDE the if block -->
-</body>
-```
-
-```python
-# app.py — V1
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
-    # ❌ No use_reloader=False — causes double model load on Windows
-```
-
-### V2 Code (Fixed)
-
-```html
-<!-- base.html — V2: Two completely separate layout branches -->
-<body>
-
-{% if current_user.is_authenticated %}
-<!-- ══════════════════════════════════════════════
-     AUTHENTICATED LAYOUT — sidebar + topbar + content
-══════════════════════════════════════════════ -->
-<div class="app-wrapper">
-  <aside class="sidebar">
-    ...sidebar with nav links...
-  </aside>
-  <main class="main-content">
-    <header class="topbar">...</header>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      ...flash messages...
-    {% endwith %}
-    <div class="content-area">
-      {% block content %}{% endblock %}
-    </div>
-  </main>
 </div>
 
-{% else %}
-<!-- ══════════════════════════════════════════════
-     GUEST LAYOUT — centered auth card only
-══════════════════════════════════════════════ -->
-<div class="auth-wrapper">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    ...flash messages for auth pages...
-  {% endwith %}
-  {% block content %}{% endblock %}
-</div>
+---
 
-{% endif %}
-</body>
-```
+## Overview
 
-```python
-# app.py — V2
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
-    # ✅ use_reloader=False — prevents double model load on Windows
-```
+**Skill Job Matcher Pro** is a production-grade recruitment intelligence platform that replaces brittle keyword filtering with transformer-based semantic matching. It ingests a candidate's resume — or a manually curated skill profile — generates dense vector embeddings using `all-MiniLM-L6-v2`, and scores every job in the database against that representation using cosine similarity.
 
-### Result After Fix
+The result is a ranked list of opportunities with explainable match scores, per-job skill gap analysis, and a global learning roadmap — all rendered server-side through a secure, rate-limited Flask application backed by Supabase PostgreSQL.
 
-| Page | V1 | V2 |
-|------|----|----|
-| `/login` | ❌ Sidebar visible, broken layout | ✅ Clean centered auth card |
-| `/register` | ❌ Sidebar visible, broken layout | ✅ Clean centered auth card |
-| `/dashboard` (logged in) | ✅ Sidebar shows | ✅ Sidebar shows |
-| Windows startup | ❌ Model loads twice, race condition | ✅ Single process, stable startup |
+**Built for:** developers building a portfolio that demonstrates real AI/ML integration, and candidates who want to understand precisely where their profile sits relative to the market.
 
 ---
 
-<a name="bug3"></a>
-## 🐛 Bug Fix 3 — Dashboard Crashed for New Users with No Resume
+## Table of Contents
 
-### What Was Happening
-After a brand new user registered and logged in for the first time, the dashboard
-page threw a Jinja2 `UndefinedError` and showed a 500 internal server error
-instead of the welcome screen. The same crash also happened on the Jobs and
-Profile pages.
-
-### Why It Happened
-The dashboard template tried to access index `[0]` of `top_matches` directly,
-and used variables like `top_matches[0].job.title` without first checking
-whether any matches existed. Since a new user has no resume and no matches,
-`top_matches` was an empty list — and `[][0]` raises an `IndexError` inside
-Jinja2 which surfaces as an `UndefinedError`.
-
-### V1 Template (Broken)
-
-```html
-<!-- templates/dashboard/index.html — V1 -->
-
-<!-- ❌ Crashes when top_matches is empty (new user, no resume yet) -->
-<div class="best-match-title">{{ top_matches[0].job.title }}</div>
-<div class="best-match-score">{{ top_matches[0].score_int }}%</div>
-
-<!-- ❌ Iterates skills_list — crashes if latest_resume is None -->
-{% for skill in all_skills %}
-  <span class="skill-pill">{{ skill }}</span>
-{% endfor %}
-```
-
-```html
-<!-- templates/dashboard/profile.html — V1 -->
-
-<!-- ❌ Accesses resume.skills_list without checking if resumes exist -->
-{{ resumes[0].original_filename }}
-```
-
-### V2 Template (Fixed)
-
-```html
-<!-- templates/dashboard/index.html — V2 -->
-
-<!-- ✅ Guard the entire best-match section -->
-{% if top_matches %}
-  {% set best = top_matches[0] %}
-  <div class="best-match-card">
-    <div class="best-match-title">{{ best.job.title }}</div>
-    <div class="best-match-score">{{ best.score_int }}%</div>
-  </div>
-{% endif %}
-
-<!-- ✅ Show empty state card when no resume uploaded yet -->
-{% if not latest_resume %}
-  <div class="empty-state-card">
-    <div class="empty-icon"><i class="bi bi-cpu"></i></div>
-    <h4>No analysis yet</h4>
-    <p>Upload your resume on the left to run the AI matching engine.</p>
-  </div>
-{% else %}
-  {% for skill in all_skills %}
-    <span class="skill-pill">{{ skill }}</span>
-  {% endfor %}
-{% endif %}
-```
-
-```html
-<!-- templates/dashboard/jobs.html — V2 -->
-
-<!-- ✅ Empty state when search returns no results -->
-{% if jobs_page.items %}
-  <div class="jobs-grid">
-    {% for job in jobs_page.items %}...{% endfor %}
-  </div>
-{% else %}
-  <div class="text-center py-5">
-    <h5>No jobs found</h5>
-    <p>Try different search terms or remove the category filter.</p>
-  </div>
-{% endif %}
-```
-
-### Result After Fix
-
-| User State | V1 | V2 |
-|------------|----|----|
-| New user, no resume | ❌ 500 crash | ✅ Clean empty state with upload prompt |
-| No jobs in search results | ❌ Crash or blank | ✅ "No jobs found" message |
-| Empty resume history | ❌ Crash | ✅ "Upload your first resume" prompt |
-| User with resumes | ✅ Works | ✅ Works |
+1. [The Problem with Keyword Matching](#1-the-problem-with-keyword-matching)
+2. [Why Semantic Embeddings](#2-why-semantic-embeddings)
+3. [AI Workflow](#3-ai-workflow)
+4. [Architecture](#4-architecture)
+5. [Security](#5-security)
+6. [Feature Set](#6-feature-set)
+7. [Tech Stack](#7-tech-stack)
+8. [Project Structure](#8-project-structure)
+9. [Installation](#9-installation)
+10. [Environment Variables](#10-environment-variables)
+11. [Screenshots](#11-screenshots)
+12. [Deployment](#12-deployment)
+13. [Future Roadmap](#13-future-roadmap)
 
 ---
 
-<a name="bug4"></a>
-## 🐛 Bug Fix 4 — No Way to Match Jobs Without a Resume File
+## 1. The Problem with Keyword Matching
 
-### What Was Happening
-The entire AI matching pipeline was locked behind a resume file upload. Users who
-did not have a PDF/DOCX file on hand — or whose resume parser extracted zero
-skills from their document — had no way to use the platform at all. The matching
-engine simply returned empty results with no alternative path.
+Most applicant tracking systems and job boards evaluate fit by scanning a resume for exact string matches against a job description. This approach is fast to implement and easy to explain — and it consistently produces wrong results.
 
-### Why It Happened
-V1 was designed with a single entry point: upload file → parse → extract → match.
-There was no concept of skills that a user could enter manually. The `Resume`
-model was the only way to supply skills to the matcher.
+Consider a senior candidate whose resume describes building "ML pipelines with PyTorch and distributed training on AWS". A job posting asks for experience in "Machine Learning", "Deep Learning", and "cloud infrastructure". A keyword filter compares character sequences. It finds no overlap with "ML", partial overlap with "cloud", and nothing for "Deep Learning" — and rejects the candidate.
 
-### V1 Code (Broken)
+The failure mode is symmetric. Junior candidates who have learned to game ATS systems by pasting exact job-description phrases into a hidden white-on-white text block score higher than qualified candidates who simply wrote their resume in plain professional language.
 
-```python
-# routes/dashboard.py — V1
-# Only 3 routes existed:
-@dashboard_bp.route("/", methods=["GET"])           # dashboard
-@dashboard_bp.route("/jobs", methods=["GET"])       # job browser
-@dashboard_bp.route("/profile", methods=["GET"])    # profile
+**The underlying issue:** keyword matching treats text as a bag of unrelated tokens. It has no model of meaning, no understanding of domain synonymy, and no mechanism for recognising that "Backend Engineer" and "Python Developer" describe substantially overlapping skill sets.
 
-# ❌ No skill entry, no manual matching, no way to use platform without a file
-```
+| Keyword Match | Reality |
+|---|---|
+| "ML Engineer" ≠ "AI Developer" | Same role, different titles |
+| "PostgreSQL" ≠ "relational databases" | Same concept, different specificity |
+| "Python" ≠ "Flask, Django, FastAPI" | Subset relationship, not equivalence |
+| "cloud infrastructure" ≠ "AWS, GCP, Azure" | Abstraction vs. implementation |
 
-```python
-# routes/analysis.py — V1
-skills_list = extract_skills(raw_text)
-# ❌ Only source of skills was the parsed resume — manual skills didn't exist
-match_results = match_resume_to_jobs(
-    resume_text=raw_text,
-    resume_skills=skills_list,
-    jobs=jobs,
-)
-```
-
-### V2 Code (Fixed)
-
-**New model added — `models/user_skill.py`:**
-
-```python
-# models/user_skill.py — V2 (NEW)
-class UserSkill(db.Model):
-    __tablename__ = "user_skills"
-
-    id         = db.Column(db.Integer, primary_key=True)
-    user_id    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    resume_id  = db.Column(db.Integer, db.ForeignKey("resumes.id"), nullable=True)
-    #   └─ None = global skill applied to every analysis
-    #   └─ <id> = scoped to one specific resume upload
-    skill_name = db.Column(db.String(200), nullable=False)
-    source     = db.Column(db.String(20), default="manual")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-```
-
-**New routes added to `routes/dashboard.py`:**
-
-```python
-# routes/dashboard.py — V2 (NEW routes)
-@dashboard_bp.route("/skills", methods=["GET"])           # skill management view
-@dashboard_bp.route("/skills", methods=["POST"])          # add skill(s)
-@dashboard_bp.route("/skills/remove", methods=["POST"])   # remove a skill
-@dashboard_bp.route("/manual", methods=["GET"])           # manual matching page
-@dashboard_bp.route("/match_manual", methods=["POST"])    # run matcher (no DB save)
-@dashboard_bp.route("/resume/<int:resume_id>/delete", methods=["POST"])  # delete resume
-```
-
-**Manual skills merged into AI pipeline at analysis time:**
-
-```python
-# routes/analysis.py — V2
-skills_list = extract_skills(raw_text)
-
-# ✅ NEW: Merge manual user skills (global + resume-specific)
-from models.user_skill import UserSkill
-manual_q = (
-    UserSkill.query
-    .filter_by(user_id=current_user.id)
-    .filter(
-        (UserSkill.resume_id == None) |    # global skills
-        (UserSkill.resume_id == resume.id)  # resume-scoped skills
-    )
-    .all()
-)
-manual_skills = [u.skill_name for u in manual_q]
-
-merged_skills_set = {s for s in skills_list}
-merged_skills_set.update(manual_skills)                     # ✅ merge both sources
-skills_list = sorted(merged_skills_set, key=str.lower)
-
-match_results = match_resume_to_jobs(
-    resume_text=raw_text,
-    resume_skills=skills_list,   # ← now includes both extracted + manual
-    jobs=jobs,
-)
-```
-
-**New sidebar link in `base.html`:**
-
-```html
-<!-- base.html — V1 sidebar -->
-<a href="{{ url_for('dashboard.index') }}">Dashboard</a>
-<a href="{{ url_for('dashboard.jobs') }}">Browse Jobs</a>
-<a href="{{ url_for('dashboard.profile') }}">My Profile</a>
-<!-- ❌ No manual skills link -->
-
-<!-- base.html — V2 sidebar -->
-<a href="{{ url_for('dashboard.index') }}">Dashboard</a>
-<a href="{{ url_for('dashboard.jobs') }}">Browse Jobs</a>
-<a href="{{ url_for('dashboard.manual') }}">Manual Skills</a>  <!-- ✅ NEW -->
-<a href="{{ url_for('dashboard.profile') }}">My Profile</a>
-```
-
-### Result After Fix
-
-| Scenario | V1 | V2 |
-|----------|----|----|
-| No resume file available | ❌ Blocked | ✅ Add skills manually on /manual |
-| Resume parsed zero skills | ❌ Empty results | ✅ Manual skills fill the gap |
-| Want to test matching instantly | ❌ Must upload first | ✅ Enter skills and match in seconds |
-| Skills from both sources | ❌ Not possible | ✅ Extracted + manual merged automatically |
+Semantic matching resolves all four of these correctly because it operates on meaning, not characters.
 
 ---
 
-<a name="bug5"></a>
-## 🐛 Bug Fix 5 — Bulk Skill Entry Saved as One String
+## 2. Why Semantic Embeddings
 
-### What Was Happening
-When a user typed `"Python, Flask, Docker"` into the skill input and clicked Add,
-the database saved one skill named `"Python, Flask, Docker"` — the entire string
-as a single entry — instead of three separate skills. The skill cloud then showed
-one very long pill instead of three individual ones.
+### What an Embedding Is
 
-### Why It Happened
-The V1 `add_skill()` route (which was actually first introduced in V2 commit
-`29e4128`) treated the entire form input as a single skill name with a simple
-`.strip()` and saved it directly. There was no splitting logic.
+A text embedding is a fixed-length numerical vector that encodes the semantic content of a passage. Two passages that describe similar concepts — regardless of the specific words used — will produce vectors that are geometrically close in the embedding space. Two passages describing unrelated concepts will produce vectors that are far apart.
 
-### V1 `add_skill()` (Broken)
+`all-MiniLM-L6-v2`, the model used in this system, is a 22-million-parameter sentence transformer trained specifically on semantic similarity tasks. It maps any passage of text to a 384-dimensional dense vector. The model is compact enough for CPU inference (50–200ms per batch) while retaining strong performance on domain-specific vocabulary including technical skill names, job titles, and engineering terminology.
 
-```python
-# routes/dashboard.py — first version of add_skill()
-@dashboard_bp.route("/skills", methods=["POST"])
-@login_required
-def add_skill():
-    data = request.get_json(silent=True) or request.form
-    raw_skill = (data.get("skill") or "").strip()
+### How Similarity Is Computed
 
-    # ❌ Treats entire input as one skill — no splitting at all
-    skill = normalize_skill(raw_skill)
+Given a resume profile vector **r** and a job profile vector **j**, similarity is computed as cosine similarity — the cosine of the angle between the two vectors in 384-dimensional space:
 
-    us = UserSkill(user_id=current_user.id, skill_name=skill)
-    db.session.add(us)
-    db.session.commit()
+```
+similarity(r, j) = (r · j) / (‖r‖ × ‖j‖)
 ```
 
-### V2 `add_skill()` (Fixed)
+This produces a value between 0 (orthogonal — no semantic relationship) and 1 (identical direction — strong semantic alignment). The result is scale-invariant: a short skills list and a long resume produce comparable scores because direction, not magnitude, determines the output.
 
-```python
-# routes/dashboard.py — V2: split on comma, semicolon, or newline
-import re
+### The Blended Scoring Strategy
 
-@dashboard_bp.route("/skills", methods=["POST"])
-@login_required
-def add_skill():
-    data = request.get_json(silent=True) or request.form
-    raw_skill = (data.get("skill") or "").strip()
+Pure semantic similarity alone has a weakness: a resume that uses eloquent prose about "building scalable systems" may score high against a job requiring specific tools like Kubernetes and Terraform even when the candidate has never used those tools. Conversely, a candidate who has used those tools but wrote a terse resume may score lower than deserved.
 
-    # ✅ Split on any separator — user can paste a whole list at once
-    skills = [
-        normalize_skill(s)
-        for s in re.split(r"[;,\n]+", raw_skill)
-        if s.strip()
-    ]
+This system addresses that by blending two complementary signals:
 
-    added_skills = []
-    for skill in skills:
-        us = UserSkill(user_id=current_user.id, resume_id=resume_id, skill_name=skill)
-        db.session.add(us)
-        added_skills.append(us)
-
-    db.session.commit()
-
-    # ✅ Flash message shows correct count
-    if len(added_skills) == 1:
-        flash(f"Skill added: {added_skills[0].skill_name}", "success")
-    else:
-        flash(f"Added {len(added_skills)} skills: {', '.join(s.skill_name for s in added_skills)}", "success")
+```
+final_score = (0.60 × semantic_score%) + (0.40 × keyword_overlap%)
 ```
 
-### Result After Fix
+The semantic component captures contextual alignment. The keyword component directly rewards explicit skill coverage. The 60/40 split was chosen to weight understanding above vocabulary while preserving the signal from direct skill matches.
 
-| Input | V1 Result | V2 Result |
-|-------|-----------|-----------|
-| `Python` | 1 skill: `Python` | 1 skill: `Python` |
-| `Python, Flask` | 1 skill: `Python, Flask` ❌ | 2 skills: `Python`, `Flask` ✅ |
-| `Python; Flask; Docker` | 1 skill: `Python; Flask; Docker` ❌ | 3 skills ✅ |
-| `Python\nFlask\nDocker` (pasted list) | 1 skill ❌ | 3 skills ✅ |
-| `ml, deep learning, nlp` | 1 skill ❌ | 3 normalised skills ✅ |
+A post-processing correction (`effective_score`) handles the edge case where a candidate's skill set fully covers all required skills for a role — in which case the score is normalised to 100% regardless of the semantic component's contribution.
+
+### What This Means for Match Quality
+
+| Scenario | Keyword System | This System |
+|---|---|---|
+| Same role, different title | ❌ No match | ✅ High similarity |
+| Framework listed, language not | ❌ Partial match | ✅ Inferred relationship |
+| Terse resume, relevant experience | ❌ Low score | ✅ Context recognised |
+| Buzzword-stuffed resume, weak skills | ✅ High score | ⚠️ Penalised by keyword overlap |
+| Full skill coverage | ❌ Possible undercount | ✅ Corrected to 100% |
 
 ---
 
-<a name="bug6"></a>
-## 🐛 Bug Fix 6 — Match Score Showed Lower Than Actual
+## 3. AI Workflow
 
-### What Was Happening
-When a candidate's resume contained every single required skill for a job,
-the displayed match score was still showing values like 67% or 71% instead of
-100%. A perfect keyword coverage was being underreported because the semantic
-embedding score pulled the blended average down.
-
-### Why It Happened
-`match_score` stored in the database is the blended value: `(0.60 × semantic%) + (0.40 × keyword%)`.
-The semantic score can be 0.60 even for a perfect skill match because the embedding
-compares text similarity, not exact skill overlap. So a candidate with 100%
-keyword coverage could still get a blended score of ~72% if the resume text
-didn't semantically resemble the job description word-for-word.
-
-All display properties (`score_int`, `score_label`, `score_badge_class`,
-`progress_class`) read directly from `match_score` — so the underreported
-blended value was shown everywhere.
-
-### V1 Code (Broken)
-
-```python
-# models/match.py — V1
-@property
-def score_int(self) -> int:
-    return int(round(self.match_score))  # ❌ always uses raw blended score
-
-@property
-def score_label(self) -> str:
-    if self.match_score >= 75:    # ❌ compares raw blended value
-        return "Excellent"
-    if self.match_score >= 55:
-        return "Good"
-    if self.match_score >= 35:
-        return "Fair"
-    return "Low"
-
-@property
-def score_badge_class(self) -> str:
-    if self.match_score >= 75:    # ❌ raw blended value again
-        return "badge-excellent"
-    ...
-```
-
-### V2 Code (Fixed)
-
-```python
-# models/match.py — V2
-@property
-def effective_score(self) -> float:
-    """Return the most accurate display score, correcting blended underreporting."""
-
-    # ✅ Case 1: All required skills are matched → must be 100%
-    if self.job and self.job.required_skills:
-        required_lower = {s.lower() for s in self.job.required_skills}
-        matched_lower  = {s.lower() for s in self.matched_skills}
-        if required_lower and required_lower <= matched_lower:
-            return 100.0
-
-    # ✅ Case 2: Keyword score is higher than blended → take the better one
-    if self.keyword_score is not None:
-        return max(self.match_score, self.keyword_score)
-
-    # Case 3: No better info — use stored blended score
-    return self.match_score
-
-# All display properties now use effective_score instead of match_score
-@property
-def score_int(self) -> int:
-    return int(round(self.effective_score))   # ✅ corrected score
-
-@property
-def score_label(self) -> str:
-    score = self.effective_score              # ✅ corrected score
-    if score >= 75: return "Excellent"
-    if score >= 55: return "Good"
-    if score >= 35: return "Fair"
-    return "Low"
-
-@property
-def score_badge_class(self) -> str:
-    score = self.effective_score              # ✅ corrected score
-    if score >= 75: return "badge-excellent"
-    if score >= 55: return "badge-good"
-    if score >= 35: return "badge-fair"
-    return "badge-low"
-```
-
-### Result After Fix
-
-| Situation | V1 Score | V2 Score |
-|-----------|----------|----------|
-| All required skills matched | ❌ ~67–72% (underreported) | ✅ 100% |
-| Keyword score > blended score | ❌ Lower blended shown | ✅ Higher score shown |
-| Partial match (normal case) | ✅ Correct | ✅ Correct |
-| No skills matched | ✅ Low score | ✅ Low score |
-
----
-
-<a name="bug7"></a>
-## 🐛 Bug Fix 7 — `psycopg2-binary` Failed to Install on Python 3.13
-
-### What Was Happening
-On Python 3.13 or certain Windows configurations, `pip install -r requirements.txt`
-failed with a C compiler / build wheel error when trying to install `psycopg2-binary`:
+Every resume analysis runs through a deterministic pipeline. Each stage has a single responsibility and fails explicitly with a user-visible error if it cannot proceed.
 
 ```
-error: Microsoft Visual C++ 14.0 or greater is required.
-Get it with "Microsoft C++ Build Tools"
-```
-
-### Why It Happened
-`psycopg2-binary` is the older PostgreSQL adapter (psycopg2). Its pre-built
-binary wheels for Python 3.13 were not yet available on PyPI at the time of the
-original scaffold, forcing pip to attempt a source build which requires the MSVC
-compiler on Windows.
-
-### V1 `requirements.txt` (Broken)
-
-```
-# requirements.txt — V1
-psycopg2-binary==2.9.9     # ❌ no pre-built wheel for Python 3.13
-scikit-learn==1.5.0
-torch==2.3.1               # ❌ hard-pinned — conflicts on some platforms
-numpy==1.26.4
-```
-
-### V2 `requirements.txt` (Fixed)
-
-```
-# requirements.txt — V2
-psycopg[binary]            # ✅ psycopg3 — modern driver, wheels available for Python 3.13
-scikit-learn==1.6.0        # ✅ updated — bug fixes in cosine_similarity edge cases
-torch>=2.6.0               # ✅ flexible pin — pip resolves compatible version per platform
-numpy==2.2.0               # ✅ updated — required for torch >=2.6 compatibility
-```
-
-`psycopg[binary]` is the modern psycopg3 driver. It has pre-built binary wheels
-for all major platforms and Python versions, so no C compiler is needed.
-
-### Result After Fix
-
-| Platform | V1 | V2 |
-|----------|----|-----|
-| Python 3.13 / Windows (no MSVC) | ❌ Build failure | ✅ Installs from wheel |
-| macOS / Linux | ✅ Worked | ✅ Works |
-| Python 3.11 / 3.12 | ✅ Worked | ✅ Works |
-| Heroku / Render (Python 3.13) | ❌ Build failure | ✅ Works |
-
----
-
-<a name="imp1"></a>
-## ✨ Improvement 1 — Manual Skill Entry System
-
-### Before (V1)
-Skills only came from parsed resume files. No UI existed for direct skill input.
-No `UserSkill` model existed. The database had 4 tables: `users`, `resumes`,
-`jobs`, `match_results`.
-
-### After (V2)
-
-A complete manual skill subsystem was built — a fifth database table, new routes,
-new templates, and integration into the AI pipeline.
-
-**New pages added:**
-
-`/dashboard/manual` — Enter skills and run a match instantly without uploading
-any file. Results are displayed on the page without being saved to the database.
-
-`/dashboard/skills` — Full skill library: view all manually added skills, grouped
-by global vs resume-specific, and remove individual entries.
-
-```python
-# routes/dashboard.py — V2: manual matching (no DB persistence)
-@dashboard_bp.route('/manual', methods=['GET'])
-@login_required
-def manual():
-    manual_skills_data = UserSkill.query.filter_by(user_id=current_user.id).all()
-    manual_skills = [u.skill_name for u in manual_skills_data]
-    jobs = Job.query.filter_by(is_active=True).all()
-
-    match_results = []
-    if manual_skills and jobs:
-        match_results = match_resume_to_jobs(
-            resume_text="",                # ← no resume text needed
-            resume_skills=manual_skills,   # ← manual skills drive the match
-            jobs=jobs,
-        )
-
-    return render_template('dashboard/manual.html',
-                           manual_skills_data=manual_skills_data,
-                           match_results=match_results)
-```
-
-**Skill scope — global vs resume-specific:**
-
-| Scope | `resume_id` value | Applied when |
-|-------|------------------|--------------|
-| Global | `NULL` | Every resume analysis for this user |
-| Resume-specific | `<resume_id>` | Only when that specific resume is analysed |
-
----
-
-<a name="imp2"></a>
-## ✨ Improvement 2 — `normalize_skill()` Maps Free Text to Taxonomy
-
-### Before (V1)
-There was no function to handle user-typed skill names. If a user typed `"python"`,
-it would be stored as `"python"` — lowercase, not matching the canonical `"Python"`
-in the 330-entry taxonomy. Skills added manually would never match correctly in
-keyword overlap calculations.
-
-```python
-# utils/skill_extractor.py — V1
-# Only three public functions existed:
-def extract_skills(text: str) -> list[str]: ...
-def skills_to_string(skills: list[str]) -> str: ...
-def string_to_skills(skills_str: str) -> list[str]: ...
-# ❌ No normalize_skill() — raw user input stored as-is
-```
-
-### After (V2)
-
-```python
-# utils/skill_extractor.py — V2 (NEW)
-def normalize_skill(raw_skill: str) -> str:
-    """
-    Map a manually-entered skill to the canonical taxonomy name where possible.
-    Falls back to title-case if no match is found.
-    """
-    if not raw_skill or not raw_skill.strip():
-        return ""
-
-    key = raw_skill.strip().lower()
-    taxonomy_map = {s.lower(): s for s in SKILL_TAXONOMY}
-
-    # Step 1: Exact match → return canonical name
-    # "python" → "Python", "nlp" → "NLP", "aws" → "AWS"
-    if key in taxonomy_map:
-        return taxonomy_map[key]
-
-    # Step 2: Substring match → longest taxonomy entry that contains the input
-    # "machine" → "Machine Learning", "deep" → "Deep Learning"
-    candidates = [s for s in SKILL_TAXONOMY if key in s.lower()]
-    if candidates:
-        return sorted(candidates, key=len, reverse=True)[0]
-
-    # Step 3: Fallback → title-case the user's input as-is
-    # "myframework" → "Myframework"
-    return raw_skill.strip().title()
-```
-
-**Example mappings:**
-
-| User Types | normalize_skill() Returns |
-|------------|--------------------------|
-| `python` | `Python` |
-| `PYTHON` | `Python` |
-| `nlp` | `Natural Language Processing` |
-| `ml` → (no exact match) | `Machine Learning` (substring) |
-| `aws` | `AWS` |
-| `k8s` → (no match) | `K8S` (title fallback) |
-| `docker` | `Docker` |
-
----
-
-<a name="imp3"></a>
-## ✨ Improvement 3 — Resume Delete with File Cleanup
-
-### Before (V1)
-The profile page listed all uploaded resumes but there was no way to delete them.
-Old files accumulated in the `uploads/` folder forever. Orphaned match results
-remained in the database. No route existed to handle deletion.
-
-```python
-# routes/dashboard.py — V1
-@dashboard_bp.route("/profile", methods=["GET"])
-@login_required
-def profile():
-    resumes = Resume.query.filter_by(user_id=current_user.id).all()
-    return render_template("dashboard/profile.html", resumes=resumes)
-    # ❌ Read-only — no delete functionality at all
-```
-
-### After (V2)
-
-```python
-# routes/dashboard.py — V2 (NEW)
-@dashboard_bp.route('/resume/<int:resume_id>/delete', methods=['POST'])
-@login_required
-def delete_resume(resume_id):
-    resume = Resume.query.get(resume_id)
-
-    # ✅ Ownership check — users can only delete their own resumes
-    if not resume:
-        flash('Resume not found.', 'warning')
-        return redirect(url_for('dashboard.profile'))
-
-    if resume.user_id != current_user.id:
-        flash('Unauthorized.', 'danger')
-        return redirect(url_for('dashboard.profile'))
-
-    stored_filename = resume.stored_filename
-    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], stored_filename)
-
-    # ✅ Step 1: Delete from database (cascade removes match_results)
-    db.session.delete(resume)
-    db.session.commit()
-
-    # ✅ Step 2: Delete physical file from disk
-    if os.path.exists(filepath):
-        os.remove(filepath)
-
-    flash(f'Resume "{resume.original_filename}" deleted successfully.', 'success')
-    return redirect(url_for('dashboard.profile'))
-```
-
-**What gets cleaned up on delete:**
-
-| Item | V1 | V2 |
-|------|----|----|
-| `resumes` DB row | ❌ Stays forever | ✅ Deleted |
-| `match_results` rows | ❌ Orphaned forever | ✅ Cascade deleted |
-| File in `uploads/` folder | ❌ Stays on disk forever | ✅ Removed from disk |
-| Ownership verified | ❌ No check | ✅ Checked — rejects cross-user deletes |
-
----
-
-<a name="imp4"></a>
-## ✨ Improvement 4 — SQLite Dev Fallback (No DB Server Needed)
-
-### Before (V1)
-`DevelopmentConfig` required a PostgreSQL database. If no `DATABASE_URL` was
-set in `.env`, the app pointed at `localhost:5432` which most developers don't
-have running — causing an immediate connection error on first run.
-
-```python
-# config.py — V1 DevelopmentConfig
-class DevelopmentConfig(BaseConfig):
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/skill_job_matcher_dev"
-        # ❌ Requires a local PostgreSQL server — most devs don't have one
-    )
-```
-
-### After (V2)
-
-```python
-# config.py — V2 DevelopmentConfig
-class DevelopmentConfig(BaseConfig):
-    # ✅ Auto-uses SQLite if no DATABASE_URL is set in .env
-    # Developer needs zero database setup to get started
-    default_sqlite_path = os.path.join(BASE_DIR, "instance", "dev.sqlite")
-    default_sqlite_uri  = f"sqlite:///{default_sqlite_path.replace(chr(92), '/')}"
-
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL",
-        default_sqlite_uri    # ← SQLite file created automatically on first run
-    )
-```
-
-**Developer experience comparison:**
-
-| Scenario | V1 | V2 |
-|----------|----|-----|
-| Clone repo + `pip install` + `python app.py` | ❌ Connection refused (no Postgres) | ✅ Works immediately with SQLite |
-| Have Supabase URL in `.env` | ✅ Works | ✅ Works (PostgreSQL used) |
-| Have local Postgres running | ✅ Works | ✅ Works |
-| Production deployment | ✅ PostgreSQL | ✅ PostgreSQL |
-| Unit tests | ✅ In-memory SQLite | ✅ In-memory SQLite |
-
----
-
-<a name="imp5"></a>
-## ✨ Improvement 5 — Manual-Only Matching (No Upload Required)
-
-### Before (V1)
-Running the AI matcher required going through the full pipeline:
-upload file → parse → extract → match. There was no shortcut.
-
-### After (V2)
-
-The `/dashboard/match_manual` route runs the full semantic matcher using only
-manually entered skills, skipping file upload, parsing, and DB persistence entirely.
-Results are rendered directly as HTML — no round-trip to the database.
-
-```python
-# routes/dashboard.py — V2
-@dashboard_bp.route('/match_manual', methods=['POST'])
-@login_required
-def match_manual():
-    # Collect global + resume-scoped manual skills
-    q = UserSkill.query.filter_by(user_id=current_user.id)
-    manual_skills = [u.skill_name for u in q.all()]
-
-    jobs = Job.query.filter_by(is_active=True).all()
-
-    # ✅ Full semantic AI matching — no file, no DB write
-    match_results = match_resume_to_jobs(
-        resume_text="",            # ← empty — no resume text needed
-        resume_skills=manual_skills,
-        jobs=jobs,
-    )
-
-    # ✅ Render results inline — nothing saved to DB
-    return render_template('dashboard/manual_matches.html', matches=match_results)
+┌─────────────────────────────────────────────────────────────┐
+│  STAGE 1 — Ingestion                                        │
+│                                                             │
+│  User uploads PDF or DOCX via the secure upload form.       │
+│  File is validated (extension whitelist, 10 MB hard limit), │
+│  renamed to a UUID to prevent path traversal, and saved     │
+│  to the uploads/ directory.                                 │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│  STAGE 2 — Parsing                                          │
+│                                                             │
+│  utils/parser.py dispatches to pdfplumber (PDF) or          │
+│  python-docx (DOCX). Text is extracted page by page,        │
+│  including table cells. Section heuristics identify         │
+│  education and certification blocks for structured storage.  │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│  STAGE 3 — Skill Extraction                                 │
+│                                                             │
+│  utils/skill_extractor.py runs the raw text against a       │
+│  261-entry curated skill taxonomy. Each skill has a         │
+│  compiled, LRU-cached boundary-aware regex pattern.         │
+│  Longer phrases match before shorter substrings to          │
+│  prevent partial hits. Output is a sorted list of           │
+│  canonical skill names.                                     │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│  STAGE 4 — Manual Skill Merge                               │
+│                                                             │
+│  Any skills the user has added manually (via /skills or     │
+│  /manual) are fetched from the user_skills table and        │
+│  merged into the extracted skill set using set union.       │
+│  normalize_skill() maps free-text input to canonical        │
+│  taxonomy names before merge.                               │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│  STAGE 5 — Embedding Generation                             │
+│                                                             │
+│  utils/matcher.py builds a resume profile string:           │
+│  "Skills: <skill list>. Experience: <first 400 words>"      │
+│  and a job profile string per listing:                      │
+│  "Job: <title>. Skills required: <skills>. <description>"   │
+│                                                             │
+│  SentenceTransformer("all-MiniLM-L6-v2") encodes all        │
+│  strings in a single batch call, producing 384-dimensional  │
+│  numpy arrays. The model is loaded once per process and     │
+│  cached in memory (thread-safe lazy load with a lock).      │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│  STAGE 6 — Cosine Similarity                                │
+│                                                             │
+│  sklearn.metrics.pairwise.cosine_similarity computes the    │
+│  similarity between the resume embedding and every job      │
+│  embedding in a single matrix operation (1 × n_jobs).       │
+│  Output is the semantic_score for each job.                 │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│  STAGE 7 — Keyword Overlap Scoring                          │
+│                                                             │
+│  For each job, the candidate's skill set is intersected     │
+│  with the job's required_skills list (case-normalised).     │
+│  keyword_score = |matched| / |required| × 100              │
+│  matched_skills and missing_skills are recorded per job.    │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│  STAGE 8 — Score Blending & Ranking                         │
+│                                                             │
+│  blended = (0.60 × semantic_pct) + (0.40 × keyword_score)  │
+│  Results are sorted descending by blended score.            │
+│  effective_score() post-processes: full keyword coverage    │
+│  → 100%; blended < keyword_score → use keyword_score.      │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│  STAGE 9 — Persistence                                      │
+│                                                             │
+│  One Resume row and up to 25 MatchResult rows are           │
+│  written to PostgreSQL in a single transaction.             │
+│  matched_skills and missing_skills stored as JSON arrays.   │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│  STAGE 10 — Skill Gap Analysis & Dashboard                  │
+│                                                             │
+│  The dashboard aggregates missing_skills across all matches │
+│  ranked by frequency — producing a global learning roadmap. │
+│  The top 10 matches, skill cloud, and gap analysis are      │
+│  rendered server-side via Jinja2 and returned as HTML.      │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-<a name="files"></a>
-## 📁 File-by-File Summary
+## 4. Architecture
 
-### `models/user_skill.py` — New in V2
+### Application Layer
 
-| What | V1 | V2 |
-|------|----|----|
-| File exists | ❌ Did not exist | ✅ New model |
-| Table | Not present | `user_skills` |
-| Purpose | — | Store manually added skills |
-| Resume scoping | — | `resume_id=NULL` (global) or `<id>` (scoped) |
-| Relationship | — | `User.manual_skills` back-populates |
+The Flask application is structured using the **application factory pattern**. No global `app` object is created at module import time — instead, `create_app()` instantiates Flask, applies configuration, initialises extensions, registers blueprints, seeds the database, and returns the configured application. This design enables clean environment switching, straightforward unit testing with `TestingConfig`, and avoids circular import issues between models, extensions, and routes.
 
-### `models/match.py` — Updated
+Three blueprints handle all request routing:
 
-| What | V1 | V2 |
-|------|----|----|
-| `effective_score` property | ❌ Did not exist | ✅ Corrects blended underreporting |
-| `score_int` reads from | `match_score` | `effective_score` |
-| `score_label` reads from | `match_score` | `effective_score` |
-| `score_badge_class` reads from | `match_score` | `effective_score` |
-| `progress_class` reads from | `match_score` | `effective_score` |
-| Full keyword coverage | ❌ Shows ~67–72% | ✅ Shows 100% |
+| Blueprint | Prefix | Responsibility |
+|---|---|---|
+| `auth_bp` | `/` | Registration, login, logout |
+| `dashboard_bp` | `/dashboard` | UI pages — dashboard, job browser, profile, skills, manual matching |
+| `analysis_bp` | `/` | The `/analyze` POST route — owns the full AI pipeline |
 
-### `models/__init__.py` — Updated
+Extensions (`db`, `limiter`, `login_manager`) are instantiated in `extensions.py` without an app object and wired to the application via `.init_app()` inside the factory. This singleton pattern is the standard approach for avoiding circular imports in non-trivial Flask applications.
 
-```diff
-  from .user   import User
-  from .resume import Resume
-  from .job    import Job
-  from .match  import MatchResult
-+ from .user_skill import UserSkill   # ← NEW V2
+### Database Layer
+
+SQLAlchemy 2.0 ORM manages all database interaction. Five models define the schema:
+
+```
+users
+  │
+  ├── resumes ─────────── match_results ── jobs
+  │         (1:many)           (many:1)
+  │
+  └── user_skills
+        resume_id nullable:
+          NULL  → global skill (applied to every analysis)
+          <id>  → scoped to one specific resume
 ```
 
-### `models/user.py` — Updated
+The `MatchResult` model stores both raw scores (`match_score`, `semantic_score`, `keyword_score`) and derived arrays (`matched_skills`, `missing_skills`) as JSON text columns. The `effective_score` property computes the corrected display score at read time without requiring a database write — keeping the persistence layer simple and the display layer accurate.
 
-```diff
-  resumes = db.relationship("Resume", back_populates="user", ...)
+### Configuration Strategy
 
-+ manual_skills = db.relationship(   # ← NEW V2
-+     "UserSkill",
-+     back_populates="user",
-+     cascade="all, delete-orphan",
-+ )
-```
+Three configuration classes inherit from `BaseConfig`:
 
-### `utils/skill_extractor.py` — Updated
+- **`DevelopmentConfig`** — falls back to a local SQLite file if `DATABASE_URL` is not set, enabling zero-setup local development
+- **`ProductionConfig`** — requires a PostgreSQL URI, enforces HTTPS-only session cookies
+- **`TestingConfig`** — in-memory SQLite, disables CSRF, used by the test suite
 
-| Function | V1 | V2 |
-|----------|----|----|
-| `extract_skills()` | ✅ Present | ✅ Present (unchanged) |
-| `skills_to_string()` | ✅ Present | ✅ Present (unchanged) |
-| `string_to_skills()` | ✅ Present | ✅ Present (unchanged) |
-| `normalize_skill()` | ❌ Did not exist | ✅ New — taxonomy lookup with fallback |
+The active class is selected by the `FLASK_ENV` environment variable. All secrets are read from environment variables — never hardcoded.
 
-### `routes/dashboard.py` — Heavily Extended
+### Rendering Strategy
 
-| Route | V1 | V2 |
-|-------|----|----|
-| `GET /dashboard/` | ✅ | ✅ |
-| `GET /dashboard/jobs` | ✅ | ✅ |
-| `GET /dashboard/profile` | ✅ | ✅ |
-| `GET /dashboard/skills` | ❌ | ✅ NEW |
-| `POST /dashboard/skills` | ❌ | ✅ NEW — add single or bulk |
-| `POST /dashboard/skills/remove` | ❌ | ✅ NEW |
-| `GET /dashboard/manual` | ❌ | ✅ NEW |
-| `POST /dashboard/match_manual` | ❌ | ✅ NEW |
-| `POST /dashboard/resume/<id>/delete` | ❌ | ✅ NEW |
-| Line count | 149 lines | 413 lines |
-
-### `routes/analysis.py` — Updated
-
-| Section | V1 | V2 |
-|---------|----|----|
-| Manual skill merge | ❌ Did not exist | ✅ Fetches UserSkill rows, merges with extracted |
-| Skills used in matching | Extracted only | Extracted + manual (merged set) |
-
-### `config.py` — Updated
-
-| Config class | V1 | V2 |
-|-------------|----|----|
-| `DevelopmentConfig` fallback | `postgresql://localhost` | `sqlite:///instance/dev.sqlite` |
-| `ProductionConfig` | Supabase PostgreSQL | Supabase PostgreSQL (unchanged) |
-| `TestingConfig` | `sqlite:///:memory:` | `sqlite:///:memory:` (unchanged) |
-
-### `app.py` — Updated
-
-```diff
-  if __name__ == "__main__":
--     app.run(host="0.0.0.0", port=5000, debug=False)
-+     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
-+     # Prevents double ML model load on Windows hot-reload
-```
-
-### `base.html` — Fully Restructured
-
-| Section | V1 | V2 |
-|---------|----|----|
-| Authenticated layout | Partially separated | Fully isolated `{% if %}` branch |
-| Guest layout | Leaked sidebar | Clean centered auth card only |
-| Manual Skills nav link | ❌ Missing | ✅ Added |
-| Flash messages | Auth pages missing | Both layouts handle flashes |
-
-### Templates — New in V2
-
-| File | Purpose |
-|------|---------|
-| `templates/dashboard/manual.html` | Skill entry form + match results without upload |
-| `templates/dashboard/manual_matches.html` | Results panel for manual-only matching |
-| `templates/dashboard/skills.html` | Full skill library — view, add, remove |
-
-### `static/js/dashboard.js` — New in V2
-
-Minimal JavaScript added for the skill management form UX — handles skill
-tag removal feedback without requiring a full page reload.
-
-### Files Not Changed (carried over from V1 unchanged)
-
-| File | Why untouched |
-|------|--------------|
-| `utils/parser.py` | PDF/DOCX parsing working correctly |
-| `utils/matcher.py` | Semantic matching engine working correctly |
-| `models/resume.py` | Resume model working correctly |
-| `models/job.py` | Job model working correctly |
-| `extensions.py` | Extension singletons working correctly |
-| `wsgi.py` | Gunicorn entry working correctly |
-| `gunicorn.conf.py` | Production config working correctly |
-| `data/jobs.py` | 25-job dataset unchanged |
+All pages are rendered server-side using Jinja2 templates. There is no client-side routing, no API layer consumed by a JavaScript frontend, and no SPA framework. This keeps the attack surface small, eliminates an entire class of CORS and token-storage vulnerabilities, and produces pages that are functional without JavaScript enabled.
 
 ---
 
-<a name="setup"></a>
-## ⚙️ Setup & Installation
+## 5. Security
 
-### Step 1 — Clone and create virtual environment
+Production systems are not an afterthought here. Security controls are applied at every layer of the stack.
+
+### Authentication
+
+Passwords are hashed using Werkzeug's `generate_password_hash`, which applies PBKDF2-SHA256 with a randomly generated salt per password. The plain-text password exists in memory only for the duration of the hash computation and is never written to any log, database column, or session variable.
+
+```python
+# Storage — one-way hash, never reversible
+user.password_hash = generate_password_hash(plain_text)
+
+# Verification — constant-time comparison prevents timing attacks
+is_valid = check_password_hash(user.password_hash, plain_text)
+```
+
+Flask-Login manages session state. The session cookie is:
+
+| Property | Value | Why |
+|---|---|---|
+| `HttpOnly` | `True` | Inaccessible to JavaScript — prevents XSS cookie theft |
+| `SameSite` | `Lax` | Cookie not sent on cross-origin POST requests — CSRF mitigation |
+| `Secure` | `True` in production | Cookie only transmitted over HTTPS |
+| Lifetime | 1 hour | Limits exposure window for a stolen session |
+
+### Brute-Force Protection
+
+Flask-Limiter enforces per-IP rate limits using the `get_remote_address` key function:
+
+| Endpoint | Limit | Rationale |
+|---|---|---|
+| `POST /login` | **5 requests / minute** | Limits password guessing to impractical speed |
+| `POST /register` | **3 requests / minute** | Prevents automated account creation |
+| `POST /analyze` | **10 requests / hour** | Protects CPU-intensive AI inference from abuse |
+| Global baseline | 200 / day · 50 / hour | Baseline DDoS mitigation |
+
+Exceeding any limit returns HTTP 429 with a custom error page — no stack trace, no internal detail.
+
+### File Upload Security
+
+Every uploaded file passes four validation gates before the parser sees it:
+
+1. **Extension whitelist** — only `.pdf` and `.docx` are accepted; the check reads the extension after the last `.`, not the MIME type header which is trivially spoofed
+2. **Size limit** — Flask's `MAX_CONTENT_LENGTH = 10 MB` hard limit rejects oversized payloads at the WSGI layer before Python processes the body
+3. **Filename sanitisation** — `werkzeug.utils.secure_filename()` strips path separators, null bytes, and directory traversal sequences from the original filename
+4. **UUID renaming** — the sanitised filename is discarded; the file is stored under a randomly generated UUID with only the original extension preserved, preventing enumeration and path prediction
+
+### Route Protection
+
+Every dashboard, analysis, and skill management route carries `@login_required` from Flask-Login. Unauthenticated requests are redirected to `/login` with the original URL preserved as the `next` parameter. The login handler validates that `next` is a relative path before following it — preventing open-redirect attacks where an attacker crafts a login URL that redirects to a malicious external site after authentication.
+
+Ownership is verified before destructive operations. A user attempting to delete another user's resume receives HTTP 403 — the application does not expose whether the resource exists.
+
+---
+
+## 6. Feature Set
+
+**AI Matching Engine**
+- Semantic job matching via `all-MiniLM-L6-v2` sentence embeddings and cosine similarity
+- Blended scoring: 60% semantic similarity + 40% keyword overlap
+- `effective_score` correction — full keyword coverage is normalised to 100%
+- Ranked results across 24 curated job listings spanning 14 industry categories
+- Per-job skill gap analysis with matched and missing skill arrays
+
+**Resume Intelligence**
+- PDF parsing via `pdfplumber` — handles multi-column layouts and embedded tables
+- DOCX parsing via `python-docx` — extracts paragraphs and table cell content
+- Section heuristics for education and certification block detection
+- 261-entry curated NLP skill taxonomy with boundary-aware compiled regex patterns
+
+**Manual Skill System**
+- Skill entry without file upload — useful when no document is available
+- Bulk entry via comma or semicolon-separated input
+- `normalize_skill()` maps free text to canonical taxonomy names
+- Global skills applied to every analysis; resume-scoped skills applied to one
+- Full CRUD: add, remove, scope management
+
+**Career Analysis Dashboard**
+- Stat cards: total resumes analysed, jobs in database, skills detected, top match score
+- Top-match banner with visual score ring per job
+- Global learning roadmap: missing skills ranked by frequency across all matches
+- Paginated job browser with category filter and full-text search
+
+**Platform Infrastructure**
+- Application factory pattern with three registered blueprints
+- Supabase PostgreSQL in production; SQLite auto-fallback for local development
+- Gunicorn WSGI server with configurable workers and 120-second AI timeout
+- Environment-based configuration classes (Development / Production / Testing)
+- Custom 404, 500, and 429 error pages
+
+---
+
+## 7. Tech Stack
+
+**Backend**
+
+| Package | Version | Role |
+|---|---|---|
+| Flask | 3.0 | Web framework, routing, templating |
+| Flask-Login | 0.6 | Session management, route protection |
+| Flask-Limiter | 3.7 | Rate limiting, brute-force protection |
+| Flask-SQLAlchemy | 3.1 | ORM integration |
+| SQLAlchemy | 2.0 | Database models, query construction |
+| Werkzeug | 3.0 | Password hashing, file utilities |
+| Gunicorn | 22 | Production WSGI server |
+| python-dotenv | 1.0 | Environment variable loading |
+
+**AI / Machine Learning**
+
+| Package | Version | Role |
+|---|---|---|
+| sentence-transformers | 3.0 | `all-MiniLM-L6-v2` embedding model |
+| torch | ≥ 2.6 | Model inference backend |
+| scikit-learn | 1.6 | Cosine similarity matrix computation |
+| numpy | 2.2 | Embedding array manipulation |
+
+**Resume Processing**
+
+| Package | Version | Role |
+|---|---|---|
+| pdfplumber | 0.11 | PDF text and table extraction |
+| python-docx | 1.1 | DOCX paragraph and table extraction |
+
+**Database**
+
+| Component | Role |
+|---|---|
+| PostgreSQL (Supabase) | Production database |
+| psycopg[binary] | PostgreSQL driver (psycopg3) |
+| SQLite | Local development fallback |
+
+---
+
+## 8. Project Structure
+
+```
+skill-job-matcher/
+│
+├── app.py                   # Application factory, blueprint registration,
+│                            # DB table creation, job seeding, error handlers
+│
+├── config.py                # DevelopmentConfig / ProductionConfig / TestingConfig
+├── extensions.py            # db, limiter, login_manager — instantiated without app
+├── wsgi.py                  # Gunicorn entry point: application = create_app()
+├── gunicorn.conf.py         # Workers, timeout, bind port, logging
+├── requirements.txt
+├── .env.example
+├── .gitignore
+│
+├── models/
+│   ├── user.py              # User, password hashing, Flask-Login mixin
+│   ├── resume.py            # Resume metadata, parsed content, skills_list property
+│   ├── job.py               # Job listings, required_skills JSON column
+│   ├── match.py             # MatchResult, blended scores, effective_score property
+│   └── user_skill.py        # Manual skills — NULL resume_id = global scope
+│
+├── routes/
+│   ├── auth.py              # /login (5/min), /register (3/min), /logout
+│   ├── dashboard.py         # /dashboard, /jobs, /profile, /skills,
+│   │                        # /manual, /match_manual, /resume/<id>/delete
+│   └── analysis.py          # /analyze (10/hr) — full AI pipeline
+│
+├── utils/
+│   ├── __init__.py          # save_uploaded_file(), allowed_file() — UUID renaming
+│   ├── parser.py            # pdfplumber + python-docx, section heuristics
+│   ├── skill_extractor.py   # 261-entry taxonomy, compiled regex, normalize_skill()
+│   └── matcher.py           # SentenceTransformer, cosine_similarity, gap analysis
+│
+├── data/
+│   └── jobs.py              # 24 job listings across 14 categories — auto-seeded
+│
+├── templates/
+│   ├── base.html            # Split layout: sidebar (auth) / centered card (guest)
+│   ├── auth/
+│   │   ├── login.html
+│   │   └── register.html
+│   ├── dashboard/
+│   │   ├── index.html       # Main dashboard
+│   │   ├── jobs.html        # Paginated job browser
+│   │   ├── profile.html     # Account info, resume history, delete
+│   │   ├── skills.html      # Manual skill management
+│   │   ├── manual.html      # Skill entry + match without upload
+│   │   └── manual_matches.html
+│   └── errors/
+│       ├── 404.html
+│       ├── 500.html
+│       └── 429.html
+│
+├── static/
+│   ├── css/main.css         # Dark sidebar, gradient cards, responsive layout
+│   └── js/dashboard.js      # Minimal JS for skill form UX only
+│
+├── uploads/                 # UUID-named resume files (not committed)
+└── instance/                # SQLite dev database (not committed)
+```
+
+---
+
+## 9. Installation
+
+### Prerequisites
+
+- Python 3.11 or later
+- A database: [Supabase](https://supabase.com) free tier, or nothing — SQLite is used automatically in development
+
+### Clone and create a virtual environment
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/skill-job-matcher.git
@@ -1210,74 +489,174 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-### Step 2 — Install dependencies
+### Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Step 3 — Configure environment
+The sentence-transformer model (~90 MB) downloads automatically on first analysis run. The host needs outbound internet access for the initial download; subsequent runs use the local cache.
+
+### Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
-```env
-# Generate this: python -c "import secrets; print(secrets.token_hex(32))"
-SECRET_KEY=your-generated-secret-key
+Edit `.env` with your values — see [Environment Variables](#10-environment-variables) below.
 
-FLASK_ENV=development
-
-# Leave empty → SQLite used automatically (no database server needed)
-# DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres
-```
-
-### Step 4 — Run
+### Run
 
 ```bash
-# Development — SQLite auto-created in instance/dev.sqlite
+# Development — SQLite created automatically, 24 jobs seeded on first startup
 python app.py
+
+# Production
+gunicorn -c gunicorn.conf.py wsgi:application
 ```
 
-Tables are created and 25 jobs seeded automatically on first run.
-Open [http://localhost:5000](http://localhost:5000) → Register → Upload a resume
-or go to **Manual Skills** to enter skills directly.
+Open [http://localhost:5000](http://localhost:5000). Register an account, then upload a resume or navigate to **Manual Skills** to enter your profile directly.
 
-### Step 5 — Production (Gunicorn)
+---
+
+## 10. Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `SECRET_KEY` | **Yes** | Flask session signing key. Must be at least 32 random bytes. Never reuse across environments. |
+| `DATABASE_URL` | Production only | Full PostgreSQL URI. If absent in development, SQLite is used automatically. |
+| `FLASK_ENV` | **Yes** | `development`, `production`, or `testing`. Controls config class selection and cookie security. |
+| `SENTENCE_TRANSFORMER_MODEL` | No | Override the embedding model. Default: `all-MiniLM-L6-v2`. |
+| `PORT` | No | Gunicorn bind port. Default: `8000`. |
+| `WEB_CONCURRENCY` | No | Gunicorn worker count. Default: `2`. Keep at 1–2 if memory is constrained — the model consumes ~300 MB per worker. |
+
+Generate a cryptographically strong `SECRET_KEY`:
 
 ```bash
-FLASK_ENV=production gunicorn -c gunicorn.conf.py wsgi:application
+python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-### Supabase PostgreSQL Setup
+`.env.example` for reference:
 
-1. Create a free project at [supabase.com](https://supabase.com)
-2. **Project Settings → Database → Connection string → URI → Session mode (port 5432)**
-3. Set in `.env`:
 ```env
-DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
-FLASK_ENV=production
+SECRET_KEY=replace-with-output-of-command-above
+FLASK_ENV=development
+DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
 ```
 
 ---
 
-<a name="security"></a>
-## 🔒 Security Notes
+## 11. Screenshots
 
-| Practice | Where | Why |
-|----------|-------|-----|
-| PBKDF2-SHA256 password hashing | `models/user.py → set_password()` | Passwords never stored in plain text |
-| Login rate limiting — 5/min | `routes/auth.py → @limiter.limit` | Blocks brute-force attacks |
-| Register rate limiting — 3/min | `routes/auth.py → @limiter.limit` | Prevents account enumeration |
-| Analyze rate limiting — 10/hr | `routes/analysis.py → @limiter.limit` | Protects CPU-intensive AI inference |
-| HTTP-only session cookie | `config.py → SESSION_COOKIE_HTTPONLY` | Inaccessible to scripts |
-| SameSite=Lax cookie | `config.py → SESSION_COOKIE_SAMESITE` | CSRF mitigation |
-| HTTPS-only cookie in prod | `config.py → SESSION_COOKIE_SECURE` | Cookie not sent over plain HTTP |
-| UUID filename on upload | `utils/__init__.py → save_uploaded_file()` | Prevents path traversal and collisions |
-| Extension whitelist | `utils/__init__.py → allowed_file()` | Only `.pdf` and `.docx` accepted |
-| 10 MB upload hard limit | `config.py → MAX_CONTENT_LENGTH` | Prevents large-file denial of service |
-| `secure_filename()` sanitisation | `utils/__init__.py` | Strips path separators from filenames |
-| Open-redirect protection | `routes/auth.py → login()` | `next` param only accepts relative paths |
-| Ownership check on delete | `routes/dashboard.py → delete_resume()` | Users can only delete their own resumes |
-| All secrets in `.env` | `config.py + .env.example` | Never hardcoded in source |
+> Add screenshots to the `screenshots/` directory and update the paths below.
+
+### Login
+
+![Login page](screenshots/login.png)
+
+### Dashboard — Match Results
+
+![Dashboard](screenshots/dashboard.png)
+
+### Resume Upload
+
+![Resume upload](screenshots/upload.png)
+
+### AI Match Results & Score Breakdown
+
+![Match results](screenshots/matches.png)
+
+### Skill Gap Analysis & Learning Roadmap
+
+![Skill gap](screenshots/skill_gap.png)
+
+### Manual Skill Entry
+
+![Manual skills](screenshots/manual.png)
+
+---
+
+## 12. Deployment
+
+The application ships with a `gunicorn.conf.py` and `wsgi.py` — no additional configuration is required to run in production.
+
+```bash
+# Production start command
+gunicorn -c gunicorn.conf.py wsgi:application
+```
+
+Key Gunicorn settings:
+
+```python
+workers    = int(os.getenv("WEB_CONCURRENCY", 2))  # set to 1–2 with large ML model
+timeout    = 120   # AI inference on large resumes can take several seconds
+bind       = f"0.0.0.0:{os.getenv('PORT', '8000')}"
+```
+
+### Deployment Platforms
+
+**Render** (recommended for zero-config deployment)
+
+1. Connect repository → New Web Service
+2. Build command: `pip install -r requirements.txt`
+3. Start command: `gunicorn -c gunicorn.conf.py wsgi:application`
+4. Add environment variables in the Render dashboard
+5. Set `WEB_CONCURRENCY=1` if the free tier has memory constraints
+
+**Railway**
+
+```bash
+railway init && railway up
+```
+
+Set environment variables in the Railway dashboard. PostgreSQL can be provisioned through Railway or pointed at an external Supabase instance.
+
+**VPS / Docker**
+
+The application has no external service dependencies beyond the database. A basic `Dockerfile` using `python:3.11-slim` as the base image, installing requirements, and running `gunicorn -c gunicorn.conf.py wsgi:application` as the entrypoint is sufficient.
+
+### Supabase Setup
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Navigate to **Project Settings → Database → Connection string → URI**
+3. Select **Session mode, port 5432**
+4. Set the URI as `DATABASE_URL` in your environment
+5. Tables and the job dataset are created automatically on first startup via `db.create_all()` and the seeding function in `app.py`
+
+---
+
+## 13. Future Roadmap
+
+The following enhancements are architecturally compatible with the current codebase and represent the logical next development phase:
+
+| Enhancement | Description |
+|---|---|
+| **Async analysis pipeline** | Offload embedding generation to Celery workers, return a job ID immediately, and poll for results — eliminates the blocking HTTP request during AI inference |
+| **Redis embedding cache** | Cache job embeddings keyed by `job_id + model_name`. Job descriptions change infrequently; caching eliminates re-encoding the same 25 vectors on every upload |
+| **Recruiter portal** | Role-based access for recruiters to search and rank candidates by job description, with inverse matching (job → candidates) |
+| **Cover letter generation** | Given a matched job and a candidate's skill profile, prompt an LLM API to draft a personalised cover letter addressing the specific skill gap |
+| **LLM resume feedback** | Send parsed resume text to an LLM with a structured rubric and return actionable improvement suggestions per section |
+| **Advanced analytics** | Aggregate match score distributions per category, track improvement over successive uploads, visualise skill trajectory |
+| **OAuth login** | Google and LinkedIn authentication via Flask-Dance — reduces registration friction and enables profile enrichment |
+| **Alembic migrations** | Replace `db.create_all()` with a full migration history for safe schema evolution in production |
+| **Interview recommendation** | Map skill gaps to curated learning resources and estimated preparation timelines for each matched role |
+
+---
+
+## Engineering Notes
+
+This project was developed iteratively through seven debugging cycles that produced meaningful improvements to the codebase. The `effective_score` correction in `models/match.py`, the `normalize_skill()` function in `utils/skill_extractor.py`, the manual skill merge in `routes/analysis.py`, and the SQLite development fallback in `config.py` all emerged from real problems encountered during testing — not from speculative design.
+
+The architecture prioritises explainability. Every match result carries both its semantic score (what the model thought) and its keyword score (what the taxonomy found), displayed separately in the dashboard. A candidate can understand not just their ranking but why it is what it is and what specific skills would improve it.
+
+The choice to use server-side rendering throughout — rather than a decoupled API and SPA frontend — reflects a deliberate engineering trade-off. The application is simpler to deploy, easier to reason about, and significantly harder to exploit than an equivalent system with a JavaScript client managing authentication tokens in `localStorage`.
+
+---
+
+<div align="center">
+
+**Skill Job Matcher Pro** — where semantic intelligence meets practical career engineering.
+
+MIT License · Built with Flask, Supabase, and SentenceTransformers
+
+</div>
