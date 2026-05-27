@@ -141,7 +141,7 @@ Every resume analysis runs through a deterministic pipeline. Each stage has a si
 │  STAGE 3 — Skill Extraction                                 │
 │                                                             │
 │  utils/skill_extractor.py runs the raw text against a       │
-│  330-entry curated skill taxonomy. Each skill has a         │
+│  261-entry curated skill taxonomy. Each skill has a         │
 │  compiled, LRU-cached boundary-aware regex pattern.         │
 │  Longer phrases match before shorter substrings to          │
 │  prevent partial hits. Output is a sorted list of           │
@@ -330,14 +330,14 @@ Ownership is verified before destructive operations. A user attempting to delete
 - Semantic job matching via `all-MiniLM-L6-v2` sentence embeddings and cosine similarity
 - Blended scoring: 60% semantic similarity + 40% keyword overlap
 - `effective_score` correction — full keyword coverage is normalised to 100%
-- Ranked results across 25 curated job listings spanning 14 industry categories
+- Ranked results across 24 curated job listings spanning 14 industry categories
 - Per-job skill gap analysis with matched and missing skill arrays
 
 **Resume Intelligence**
 - PDF parsing via `pdfplumber` — handles multi-column layouts and embedded tables
 - DOCX parsing via `python-docx` — extracts paragraphs and table cell content
 - Section heuristics for education and certification block detection
-- 330-entry curated NLP skill taxonomy with boundary-aware compiled regex patterns
+- 261-entry curated NLP skill taxonomy with boundary-aware compiled regex patterns
 
 **Manual Skill System**
 - Skill entry without file upload — useful when no document is available
@@ -434,11 +434,11 @@ skill-job-matcher/
 ├── utils/
 │   ├── __init__.py          # save_uploaded_file(), allowed_file() — UUID renaming
 │   ├── parser.py            # pdfplumber + python-docx, section heuristics
-│   ├── skill_extractor.py   # 330-entry taxonomy, compiled regex, normalize_skill()
+│   ├── skill_extractor.py   # 261-entry taxonomy, compiled regex, normalize_skill()
 │   └── matcher.py           # SentenceTransformer, cosine_similarity, gap analysis
 │
 ├── data/
-│   └── jobs.py              # 25 job listings across 14 categories — auto-seeded
+│   └── jobs.py              # 24 job listings across 14 categories — auto-seeded
 │
 ├── templates/
 │   ├── base.html            # Split layout: sidebar (auth) / centered card (guest)
@@ -508,7 +508,7 @@ Edit `.env` with your values — see [Environment Variables](#10-environment-var
 ### Run
 
 ```bash
-# Development — SQLite created automatically, 25 jobs seeded on first startup
+# Development — SQLite created automatically, 24 jobs seeded on first startup
 python app.py
 
 # Production
