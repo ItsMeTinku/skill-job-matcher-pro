@@ -548,8 +548,6 @@ DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
 
 ## 11. Screenshots
 
-> Add screenshots to the `screenshots/` directory and update the paths below.
-
 ### Login
 
 ![Login page](screenshots/login.png)
