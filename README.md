@@ -134,7 +134,7 @@ Every resume analysis runs through a deterministic pipeline. Each stage has a si
 │  utils/parser.py dispatches to pdfplumber (PDF) or          │
 │  python-docx (DOCX). Text is extracted page by page,        │
 │  including table cells. Section heuristics identify         │
-│  education and certification blocks for structured storage.  │
+│  education and certification blocks for structured storage. │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────┐
@@ -186,17 +186,17 @@ Every resume analysis runs through a deterministic pipeline. Each stage has a si
 │                                                             │
 │  For each job, the candidate's skill set is intersected     │
 │  with the job's required_skills list (case-normalised).     │
-│  keyword_score = |matched| / |required| × 100              │
+│  keyword_score = |matched| / |required| × 100               │
 │  matched_skills and missing_skills are recorded per job.    │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────┐
 │  STAGE 8 — Score Blending & Ranking                         │
 │                                                             │
-│  blended = (0.60 × semantic_pct) + (0.40 × keyword_score)  │
+│  blended = (0.60 × semantic_pct) + (0.40 × keyword_score)   │
 │  Results are sorted descending by blended score.            │
 │  effective_score() post-processes: full keyword coverage    │
-│  → 100%; blended < keyword_score → use keyword_score.      │
+│  → 100%; blended < keyword_score → use keyword_score.       │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────┐
