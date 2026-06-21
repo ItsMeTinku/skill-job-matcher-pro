@@ -1,6 +1,6 @@
 <div align="center">
 
-# Skill Job Matcher Pro
+## Skill Job Matcher Pro
 
 ### AI-Powered Semantic Recruitment & Career Intelligence Platform
 
