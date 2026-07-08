@@ -659,3 +659,4 @@ MIT License · Built with Flask, Supabase, and SentenceTransformers
 
 </div>
 -----------------
+Thanks for reading ❤️
