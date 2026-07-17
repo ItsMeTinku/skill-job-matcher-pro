@@ -655,7 +655,10 @@ The choice to use server-side rendering throughout — rather than a decoupled A
 
 **Skill Job Matcher Pro** — where semantic intelligence meets practical career engineering.
 
-
 </div>
 
+<div align="center">
+  
 # Thanks for reading ❤️
+
+</div>
