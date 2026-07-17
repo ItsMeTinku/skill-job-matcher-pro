@@ -655,7 +655,6 @@ The choice to use server-side rendering throughout — rather than a decoupled A
 
 **Skill Job Matcher Pro** — where semantic intelligence meets practical career engineering.
 
-MIT License · Built with Flask, Supabase, and SentenceTransformers
 
 </div>
 
