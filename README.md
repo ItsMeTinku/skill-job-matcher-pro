@@ -659,6 +659,6 @@ The choice to use server-side rendering throughout — rather than a decoupled A
 
 <div align="center">
   
-# Thanks for reading ❤️
+## Thanks for reading ❤️
 
 </div>
